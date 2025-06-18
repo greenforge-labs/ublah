@@ -1,0 +1,6 @@
+#!/usr/bin/with-contenv bashio
+# ==============================================================================
+# Cleanup the u-blox GPS RTK service
+# ==============================================================================
+
+bashio::log.info "Stopping u-blox GPS RTK service..."

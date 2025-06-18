@@ -1,0 +1,8 @@
+pyserial==3.5
+requests==2.31.0
+pynmea2==1.19.0
+pyubx2==1.2.37
+aiohttp==3.8.5
+aiofiles==23.1.0
+pyyaml==6.0.1
+websockets==11.0.3

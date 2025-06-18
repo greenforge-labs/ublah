@@ -1,0 +1,17 @@
+#!/usr/bin/with-contenv bashio
+# ==============================================================================
+# Start the u-blox GPS RTK service
+# ==============================================================================
+
+bashio::log.info "Starting u-blox GPS RTK service..."
+
+# Wait for GPS device to be available
+while [ ! -e "$(bashio::config 'gps_device')" ]; do
+    bashio::log.info "Waiting for GPS device $(bashio::config 'gps_device') to become available..."
+    sleep 5
+done
+
+bashio::log.info "GPS device found at $(bashio::config 'gps_device')"
+
+# Start the Python application
+exec python3 /opt/ublox_gps/main.py
