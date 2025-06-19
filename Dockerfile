@@ -1,4 +1,4 @@
-ARG BUILD_FROM=ghcr.io/hassio-addons/base/amd64:14.0.2
+ARG BUILD_FROM=ghcr.io/hassio-addons/base:14.0.2
 FROM $BUILD_FROM
 
 # Set shell
@@ -6,10 +6,10 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # Install packages
 RUN apk add --no-cache \
-    python3=~3.11 \
-    py3-pip=~23.1 \
-    py3-setuptools=~67.7 \
-    py3-wheel=~0.40
+    python3 \
+    py3-pip \
+    py3-setuptools \
+    py3-wheel
 
 # Python 3 HTTP Server serves the current working dir
 # So let's set it to our add-on persistent data directory.
