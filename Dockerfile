@@ -9,7 +9,12 @@ RUN apk add --no-cache \
     python3 \
     py3-pip \
     py3-setuptools \
-    py3-wheel
+    py3-wheel \
+    gcc \
+    musl-dev \
+    python3-dev \
+    libffi-dev \
+    openssl-dev
 
 # Python 3 HTTP Server serves the current working dir
 # So let's set it to our add-on persistent data directory.
@@ -17,7 +22,10 @@ WORKDIR /data
 
 # Copy Python requirements
 COPY requirements.txt /tmp/
-RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
+
+# Install Python requirements with better error handling and build options
+RUN pip3 install --no-cache-dir --upgrade pip && \
+    pip3 install --no-cache-dir --timeout=300 --retries=3 -r /tmp/requirements.txt
 
 # Copy root filesystem
 COPY rootfs /

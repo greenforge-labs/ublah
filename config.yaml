@@ -1,5 +1,5 @@
 name: "u-blox GPS RTK"
-version: "0.2.0"
+version: "0.2.1"
 slug: ublox_gps_rtk
 description: "HomeAssistant add-in for u-blox ZED-F9P GPS with NTRIP RTK corrections"
 url: "https://github.com/greenforge-labs/ublah"
