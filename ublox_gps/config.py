@@ -46,7 +46,6 @@ class Config:
             "ntrip_username": "",
             "ntrip_password": "",
             "homeassistant_url": "http://supervisor/core",
-            "homeassistant_token": "",
             # ZED-F9R specific options
             "device_type": "ZED-F9P",  # ZED-F9P or ZED-F9R
             "dead_reckoning_enabled": False,
@@ -115,7 +114,7 @@ class Config:
     
     @property
     def homeassistant_token(self) -> str:
-        return self.get("homeassistant_token", "")
+        return os.environ.get("SUPERVISOR_TOKEN")
 
     @property
     def device_type(self) -> str:

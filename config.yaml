@@ -1,5 +1,5 @@
 name: "u-blox GPS RTK"
-version: "0.3.6"  # Clean production version
+version: "0.3.7"  # Clean production version
 slug: ublox_gps_rtk
 description: "HomeAssistant add-in for u-blox ZED-F9P GPS with NTRIP RTK corrections"
 url: "https://github.com/greenforge-labs/ublah"
@@ -10,6 +10,7 @@ arch:
   - armv7
   - i386
 init: false
+homeassistant_api: true
 ports:
   8080/tcp: 8080
 ports_description:
@@ -34,7 +35,6 @@ options:
   ntrip_username: ""
   ntrip_password: ""
   homeassistant_url: "http://supervisor/core"
-  homeassistant_token: ""
 schema:
   gps_device: "str"
   gps_baudrate: "int(9600,115200)"
@@ -47,4 +47,3 @@ schema:
   ntrip_username: "str?"
   ntrip_password: "str?"
   homeassistant_url: "str"
-  homeassistant_token: "str?"
