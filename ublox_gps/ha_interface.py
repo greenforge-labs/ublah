@@ -81,6 +81,11 @@ class HomeAssistantInterface:
             return
         
         logger.info("Initializing HomeAssistant entities...")
+        # DEBUG: START - Remove after 401 authentication issue is resolved
+        logger.debug(f"Using HomeAssistant URL: {self.config.homeassistant_url}")
+        logger.debug(f"Token configured: {'Yes' if self.config.homeassistant_token else 'No'}")
+        logger.debug(f"Token length: {len(self.config.homeassistant_token) if self.config.homeassistant_token else 0}")
+        # DEBUG: END
         
         self.session = aiohttp.ClientSession(
             headers={
@@ -91,6 +96,20 @@ class HomeAssistantInterface:
         )
         
         try:
+            # DEBUG: START - Remove after 401 authentication issue is resolved
+            # Test API connectivity first
+            test_url = f"{self.config.homeassistant_url}/api/"
+            logger.debug(f"Testing API connectivity to: {test_url}")
+            
+            async with self.session.get(test_url) as response:
+                logger.debug(f"API test response: {response.status}")
+                if response.status == 401:
+                    logger.error("HomeAssistant API authentication failed - check token validity and permissions")
+                    return
+                elif response.status != 200:
+                    logger.warning(f"HomeAssistant API returned status {response.status}")
+            # DEBUG: END
+            
             # Register device
             await self._register_device()
             
@@ -251,12 +270,6 @@ class HomeAssistantInterface:
                 'friendly_name': entity_config['name'],
                 'icon': entity_config['icon'],
                 'last_updated': datetime.utcnow().isoformat(),
-                'device': {
-                    'identifiers': ['ublox_gps_rtk'],
-                    'name': 'u-blox GPS RTK',
-                    'manufacturer': 'u-blox',
-                    'model': 'ZED-F9P',
-                }
             }
         }
         
@@ -275,12 +288,28 @@ class HomeAssistantInterface:
         try:
             async with self.session.post(url, json=entity_data) as response:
                 if response.status not in [200, 201]:
-                    logger.warning(f"Failed to update entity {entity_id}: {response.status}")
+                    # Get response text for better error details
+                    response_text = await response.text()
+                    logger.warning(f"Failed to update entity {entity_id}: {response.status} - {response_text}")
+                    
+                    # DEBUG: START - Remove after 401 authentication issue is resolved
+                    if response.status == 401:
+                        logger.error(f"Authentication failed for entity update:")
+                        logger.error(f"  URL: {url}")
+                        logger.error(f"  Token present: {'Yes' if self.config.homeassistant_token else 'No'}")
+                        logger.error(f"  Token starts with: {self.config.homeassistant_token[:10]}..." if self.config.homeassistant_token else "  No token")
+                        logger.error(f"  Response headers: {dict(response.headers)}")
+                    # DEBUG: END
+                    
                 else:
                     logger.debug(f"Updated entity {entity_id} with state: {state}")
                     
         except Exception as e:
             logger.error(f"Error updating entity {entity_id}: {e}")
+            # DEBUG: START - Remove after 401 authentication issue is resolved
+            logger.error(f"  URL: {url}")
+            logger.error(f"  Entity data: {entity_data}")
+            # DEBUG: END
     
     async def cleanup(self) -> None:
         """Clean up resources."""

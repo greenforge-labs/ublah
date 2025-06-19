@@ -8,7 +8,7 @@ import logging
 import serial_asyncio
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
-from pyubx2 import UBXReader, UBXMessage, UBX_MSGIDS, SET
+from pyubx2 import UBXMessage, UBX_MSGIDS, SET
 from pynmea2 import parse as nmea_parse
 from serial.tools import list_ports
 from diagnostics import SystemDiagnostics
@@ -320,26 +320,77 @@ class GPSHandler:
     
     async def _read_data_loop(self) -> None:
         """Background task to read GPS data continuously with error handling."""
-        ubx_reader = UBXReader(self.reader)
         
         while not self._stop_event.is_set() and self.connected:
             try:
                 if self.reader.at_eof():
                     break
                 
-                # Try to read UBX message first
+                # Read data from stream
                 try:
-                    raw_data, parsed_data = ubx_reader.read()
-                    if parsed_data:
-                        await self._process_ubx_message(parsed_data)
-                    else:
-                        # If no UBX data, try NMEA
-                        line = await self.reader.readline()
-                        if line:
-                            line_str = line.decode('ascii', errors='ignore').strip()
-                            if line_str.startswith('$'):
-                                nmea_msg = nmea_parse(line_str)
-                                await self._process_nmea_message(nmea_msg)
+                    # Try to read a chunk of data
+                    data = await self.reader.read(1024)
+                    if not data:
+                        await asyncio.sleep(0.01)
+                        continue
+                    
+                    # Process data byte by byte to find UBX messages
+                    for byte in data:
+                        try:
+                            # Look for UBX message start (0xB5, 0x62)
+                            if byte == 0xB5:
+                                # Potential UBX message start
+                                next_byte = await self.reader.read(1)
+                                if next_byte and next_byte[0] == 0x62:
+                                    # Read message class and ID
+                                    header = await self.reader.read(4)
+                                    if len(header) == 4:
+                                        msg_class, msg_id, length_low, length_high = header
+                                        length = length_low + (length_high << 8)
+                                        
+                                        # Read payload and checksum
+                                        payload_and_checksum = await self.reader.read(length + 2)
+                                        if len(payload_and_checksum) == length + 2:
+                                            # Reconstruct complete UBX message
+                                            complete_msg = bytes([0xB5, 0x62]) + header + payload_and_checksum
+                                            
+                                            # Parse UBX message
+                                            try:
+                                                from pyubx2 import UBXReader
+                                                from io import BytesIO
+                                                ubx_reader = UBXReader(BytesIO(complete_msg))
+                                                raw_data, parsed_data = ubx_reader.read()
+                                                if parsed_data:
+                                                    await self._process_ubx_message(parsed_data)
+                                            except Exception as parse_error:
+                                                logger.debug(f"Failed to parse UBX message: {parse_error}")
+                            
+                            # Check for NMEA message start
+                            elif byte == ord('$'):
+                                # Read until newline for NMEA message
+                                line = b'$'
+                                while True:
+                                    char_data = await self.reader.read(1)
+                                    if not char_data:
+                                        break
+                                    char = char_data[0]
+                                    line += char_data
+                                    if char in (ord('\n'), ord('\r')):
+                                        break
+                                
+                                # Process NMEA message
+                                try:
+                                    line_str = line.decode('ascii', errors='ignore').strip()
+                                    if line_str.startswith('$'):
+                                        nmea_msg = nmea_parse(line_str)
+                                        await self._process_nmea_message(nmea_msg)
+                                except Exception as nmea_error:
+                                    logger.debug(f"Failed to parse NMEA message: {nmea_error}")
+                                    
+                        except Exception as byte_error:
+                            logger.debug(f"Error processing byte: {byte_error}")
+                            continue
+                            
                 except Exception as e:
                     logger.debug(f"Failed to parse message: {e}")
                 
@@ -349,7 +400,7 @@ class GPSHandler:
                 logger.error(f"Error reading GPS data: {e}")
                 self.diagnostics.record_operation("gps_handler", "read_data", 0.0, False, str(e))
                 await asyncio.sleep(1)  # Wait before retrying
-    
+
     async def _process_ubx_message(self, message) -> None:
         """Process incoming UBX message with enhanced ZED-F9R support and error handling."""
         try:
