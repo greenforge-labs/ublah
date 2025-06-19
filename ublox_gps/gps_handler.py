@@ -109,6 +109,9 @@ class GPSHandler:
             
             logger.info(f"✅ Serial port opened at {baudrate} baud")
             
+            # Mark as connected BEFORE attempting configuration
+            self.connected = True
+            
             # Continue with device configuration...
             try:
                 # Record successful connection
