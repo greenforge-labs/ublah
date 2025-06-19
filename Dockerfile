@@ -42,13 +42,14 @@ RUN echo "=== Testing PyPI access ===" && \
     pip3 --timeout=10 --index-url https://pypi.org/simple/ --trusted-host pypi.org list || echo "PyPI access failed"
 
 # Try installing the most basic package possible
-RUN echo "=== Testing minimal package install ===" && \
-    pip3 install --no-cache-dir --timeout=30 --verbose setuptools
+RUN echo "=== Testing disk space and environment ===" && \
+    df -h && \
+    python3 -c "import tempfile; print('Temp dir:', tempfile.gettempdir())" && \
+    ls -la /tmp/
 
-# Try installing packages with default pip (no upgrade)
-RUN echo "=== Testing package install with default pip ===" && \
-    pip3 install --no-cache-dir pyserial==3.5 && \
-    echo "=== pyserial successful ==="
+# Try installing a tiny pure Python package instead of setuptools
+RUN echo "=== Testing minimal pure Python package ===" && \
+    pip3 install --no-cache-dir --no-deps --verbose six
 
 # Install each package individually with verbose output to identify failures
 RUN echo "=== Installing pynmea2 ===" && \
