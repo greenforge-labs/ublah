@@ -4,15 +4,12 @@ FROM $BUILD_FROM
 # Set shell
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# Install system packages and Python dependencies
+# Install system packages and build dependencies
 RUN apk add --no-cache \
     python3 \
     py3-pip \
     py3-yaml \
     py3-requests \
-    py3-aiohttp \
-    py3-websockets \
-    py3-serial \
     && apk add --no-cache --virtual .build-deps \
     gcc \
     musl-dev \
@@ -24,48 +21,15 @@ RUN apk add --no-cache \
     && pip3 install --no-cache-dir \
     pynmea2==1.19.0 \
     pyubx2==1.2.37 \
+    aiohttp==3.8.5 \
     aiofiles==23.1.0 \
+    websockets==11.0.3 \
+    pyserial==3.5 \
     && apk del .build-deps
 
 # Python 3 HTTP Server serves the current working dir
 # So let's set it to our add-on persistent data directory.
 WORKDIR /data
-
-# Copy Python requirements
-COPY requirements.txt /tmp/
-
-# Test basic pip functionality with default version (skip upgrade)
-RUN echo "=== Pip Status Check ===" && \
-    which pip3 && \
-    pip3 --version && \
-    python3 -m pip --version
-
-# Test pip list separately
-RUN echo "=== Testing pip list ===" && \
-    pip3 list
-
-# Test PyPI connectivity separately  
-RUN echo "=== Testing PyPI access ===" && \
-    pip3 --timeout=10 --index-url https://pypi.org/simple/ --trusted-host pypi.org list || echo "PyPI access failed"
-
-# Try installing the most basic package possible
-RUN echo "=== Testing disk space and environment ===" && \
-    df -h && \
-    python3 -c "import tempfile; print('Temp dir:', tempfile.gettempdir())" && \
-    ls -la /tmp/
-
-# Try installing a tiny pure Python package instead of setuptools
-RUN echo "=== Testing write permissions ===" && \
-    python3 -c "import site; print('Site packages:', site.getsitepackages())" && \
-    ls -la $(python3 -c "import site; print(site.getsitepackages()[0])") && \
-    touch /tmp/test_write && rm /tmp/test_write && \
-    echo "=== Write test passed ==="
-
-# Capture full pip error output
-RUN echo "=== Testing pip with full error output ===" && \
-    pip3 install --no-cache-dir --no-deps --verbose --debug six 2>&1 || \
-    (echo "=== Pip install failed, trying alternative approach ===" && \
-     python3 -m pip install --no-cache-dir --no-deps --verbose six 2>&1)
 
 # Copy root filesystem
 COPY rootfs /
