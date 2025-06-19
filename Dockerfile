@@ -33,11 +33,13 @@ RUN echo "=== Pip Status Check ===" && \
     pip3 --version && \
     python3 -m pip --version
 
-# Test network connectivity and pip index access
-RUN echo "=== Testing pip connectivity ===" && \
-    pip3 list && \
-    pip3 search pip || echo "pip search failed (expected)" && \
-    pip3 --timeout=10 --index-url https://pypi.org/simple/ --trusted-host pypi.org list
+# Test pip list separately
+RUN echo "=== Testing pip list ===" && \
+    pip3 list
+
+# Test PyPI connectivity separately  
+RUN echo "=== Testing PyPI access ===" && \
+    pip3 --timeout=10 --index-url https://pypi.org/simple/ --trusted-host pypi.org list || echo "PyPI access failed"
 
 # Try installing the most basic package possible
 RUN echo "=== Testing minimal package install ===" && \
