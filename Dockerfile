@@ -33,6 +33,16 @@ RUN echo "=== Pip Status Check ===" && \
     pip3 --version && \
     python3 -m pip --version
 
+# Test network connectivity and pip index access
+RUN echo "=== Testing pip connectivity ===" && \
+    pip3 list && \
+    pip3 search pip || echo "pip search failed (expected)" && \
+    pip3 --timeout=10 --index-url https://pypi.org/simple/ --trusted-host pypi.org list
+
+# Try installing the most basic package possible
+RUN echo "=== Testing minimal package install ===" && \
+    pip3 install --no-cache-dir --timeout=30 --verbose setuptools
+
 # Try installing packages with default pip (no upgrade)
 RUN echo "=== Testing package install with default pip ===" && \
     pip3 install --no-cache-dir pyserial==3.5 && \
