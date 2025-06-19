@@ -1,5 +1,5 @@
 name: "u-blox GPS RTK"
-version: "0.1.0"
+version: "0.2.0"
 slug: ublox_gps_rtk
 description: "HomeAssistant add-in for u-blox ZED-F9P GPS with NTRIP RTK corrections"
 url: "https://github.com/greenforge-labs/ublah"
@@ -48,4 +48,3 @@ schema:
   ntrip_password: "str?"
   homeassistant_url: "str"
   homeassistant_token: "str?"
-image: "ghcr.io/gsokoll/ublah/{arch}"
