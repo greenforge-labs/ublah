@@ -37,7 +37,7 @@ class GPSHandler:
         self.latest_data = {}
         self.reader_task: Optional[asyncio.Task] = None
         self._stop_event = asyncio.Event()
-        self.diagnostics = SystemDiagnostics()
+        self.diagnostics = SystemDiagnostics(self.config)
     
     async def start(self) -> None:
         """Start GPS communication with error handling."""
