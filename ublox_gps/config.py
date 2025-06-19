@@ -46,7 +46,23 @@ class Config:
             "ntrip_username": "",
             "ntrip_password": "",
             "homeassistant_url": "http://supervisor/core",
-            "homeassistant_token": ""
+            "homeassistant_token": "",
+            # ZED-F9R specific options
+            "device_type": "ZED-F9P",  # ZED-F9P or ZED-F9R
+            "dead_reckoning_enabled": False,
+            "dynamic_model_type": "automotive",  # portable, stationary, pedestrian, automotive, sea, airborne_1g, airborne_2g, airborne_4g, wrist
+            "sensor_fusion_enabled": False,
+            "high_rate_positioning": False,
+            "hnr_rate_hz": 10,  # High rate navigation for ZED-F9R (up to 30Hz)
+            "disable_nmea_output": True,
+            "enable_esf_ins": False,  # Enable inertial sensor fusion data
+            "enable_nav_cov": False,  # Enable covariance matrices
+            # RTCM filtering and validation options
+            "rtcm_filtering_enabled": True,
+            "rtcm_message_filter": [1005, 1077, 1087, 1097, 1127],  # Supported message types
+            "rtcm_validation_enabled": True,
+            "rtcm_max_message_age_seconds": 30,
+            "rtcm_statistics_enabled": True,
         }
     
     def get(self, key: str, default: Any = None) -> Any:
@@ -100,3 +116,59 @@ class Config:
     @property
     def homeassistant_token(self) -> str:
         return self.get("homeassistant_token", "")
+
+    @property
+    def device_type(self) -> str:
+        return self.get("device_type", "ZED-F9P")
+
+    @property
+    def dead_reckoning_enabled(self) -> bool:
+        return self.get("dead_reckoning_enabled", False)
+
+    @property
+    def dynamic_model_type(self) -> str:
+        return self.get("dynamic_model_type", "automotive")
+
+    @property
+    def sensor_fusion_enabled(self) -> bool:
+        return self.get("sensor_fusion_enabled", False)
+
+    @property
+    def high_rate_positioning(self) -> bool:
+        return self.get("high_rate_positioning", False)
+
+    @property
+    def hnr_rate_hz(self) -> int:
+        return self.get("hnr_rate_hz", 10)
+
+    @property
+    def disable_nmea_output(self) -> bool:
+        return self.get("disable_nmea_output", True)
+
+    @property
+    def enable_esf_ins(self) -> bool:
+        return self.get("enable_esf_ins", False)
+
+    @property
+    def enable_nav_cov(self) -> bool:
+        return self.get("enable_nav_cov", False)
+
+    @property
+    def rtcm_filtering_enabled(self) -> bool:
+        return self.get("rtcm_filtering_enabled", True)
+
+    @property
+    def rtcm_message_filter(self) -> list:
+        return self.get("rtcm_message_filter", [1005, 1077, 1087, 1097, 1127])
+
+    @property
+    def rtcm_validation_enabled(self) -> bool:
+        return self.get("rtcm_validation_enabled", True)
+
+    @property
+    def rtcm_max_message_age_seconds(self) -> int:
+        return self.get("rtcm_max_message_age_seconds", 30)
+
+    @property
+    def rtcm_statistics_enabled(self) -> bool:
+        return self.get("rtcm_statistics_enabled", True)

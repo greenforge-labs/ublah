@@ -1,6 +1,6 @@
 """
 NTRIP Client for receiving RTK correction data.
-Supports standard NTRIP protocol with authentication.
+Supports standard NTRIP protocol with authentication and RTCM message filtering.
 """
 
 import asyncio
@@ -10,11 +10,12 @@ import socket
 from typing import Optional, Dict, Any
 import aiohttp
 from datetime import datetime, timedelta
+from rtcm_handler import RTCMHandler, RTCMStatistics
 
 logger = logging.getLogger(__name__)
 
 class NTRIPClient:
-    """NTRIP client for receiving RTK correction data."""
+    """NTRIP client for receiving RTK correction data with RTCM filtering."""
     
     def __init__(self, config):
         self.config = config
@@ -27,6 +28,14 @@ class NTRIPClient:
         self.connection_retries = 0
         self.max_retries = 5
         self.retry_delay = 5  # seconds
+        
+        # RTCM processing
+        self.rtcm_handler = RTCMHandler(config)
+        self.rtcm_enabled = getattr(config, 'rtcm_filtering_enabled', True)
+        self.raw_data_received = 0
+        self.filtered_data_sent = 0
+        
+        logger.info(f"NTRIP client initialized with RTCM filtering: {'enabled' if self.rtcm_enabled else 'disabled'}")
     
     async def start(self) -> None:
         """Start NTRIP client."""
@@ -122,6 +131,7 @@ class NTRIPClient:
                         break
                     
                     if chunk:
+                        self.raw_data_received += len(chunk)
                         self.corrections_buffer.extend(chunk)
                         self.last_data_time = datetime.utcnow()
                         logger.debug(f"Received {len(chunk)} bytes of RTCM data")
@@ -138,14 +148,27 @@ class NTRIPClient:
                 raise Exception(f"NTRIP connection failed with status {response.status}: {response.reason}")
     
     async def get_corrections(self) -> Optional[bytes]:
-        """Get available RTCM correction data."""
+        """Get available RTCM correction data with filtering applied."""
         if not self.corrections_buffer:
             return None
         
-        # Return all buffered corrections and clear buffer
-        corrections = bytes(self.corrections_buffer)
+        # Get all buffered corrections
+        raw_corrections = bytes(self.corrections_buffer)
         self.corrections_buffer.clear()
-        return corrections
+        
+        if self.rtcm_enabled and raw_corrections:
+            # Process through RTCM handler for filtering and validation
+            filtered_corrections, rtcm_stats = self.rtcm_handler.process_rtcm_data(raw_corrections)
+            self.filtered_data_sent += len(filtered_corrections)
+            
+            if filtered_corrections:
+                logger.debug(f"RTCM filtering: {len(raw_corrections)} → {len(filtered_corrections)} bytes "
+                           f"({rtcm_stats.valid_messages} valid msgs, {rtcm_stats.filtered_messages} filtered)")
+            
+            return filtered_corrections if filtered_corrections else None
+        else:
+            self.filtered_data_sent += len(raw_corrections)
+            return raw_corrections
     
     def is_connected(self) -> bool:
         """Check if NTRIP client is connected."""
@@ -160,16 +183,25 @@ class NTRIPClient:
         return False
     
     def get_status(self) -> Dict[str, Any]:
-        """Get NTRIP client status information."""
-        return {
-            'connected': self.is_connected(),
+        """Get NTRIP client status information with RTCM statistics."""
+        status = {
+            'connected': self.connected,
             'host': self.config.ntrip_host,
             'port': self.config.ntrip_port,
             'mountpoint': self.config.ntrip_mountpoint,
             'last_data_time': self.last_data_time.isoformat() if self.last_data_time else None,
             'connection_retries': self.connection_retries,
-            'buffer_size': len(self.corrections_buffer)
+            'buffer_size': len(self.corrections_buffer),
+            'raw_data_received': self.raw_data_received,
+            'filtered_data_sent': self.filtered_data_sent,
+            'rtcm_enabled': self.rtcm_enabled,
         }
+        
+        # Add RTCM statistics if enabled
+        if self.rtcm_enabled:
+            status['rtcm_statistics'] = self.rtcm_handler.get_statistics_summary()
+            
+        return status
     
     async def get_source_table(self) -> Optional[str]:
         """Get NTRIP source table from caster."""
