@@ -36,16 +36,16 @@ RUN echo "=== Testing pip ===" && \
 
 # Step 6: Install packages one by one
 RUN echo "=== Installing aiofiles ===" && \
-    pip3 install --no-cache-dir aiofiles
+    pip3 install --no-cache-dir --break-system-packages aiofiles
 
 RUN echo "=== Installing websockets ===" && \
-    pip3 install --no-cache-dir websockets
+    pip3 install --no-cache-dir --break-system-packages websockets
 
 RUN echo "=== Installing pynmea2 ===" && \
-    pip3 install --no-cache-dir pynmea2
+    pip3 install --no-cache-dir --break-system-packages pynmea2
 
 RUN echo "=== Installing pyubx2 ===" && \
-    pip3 install --no-cache-dir pyubx2
+    pip3 install --no-cache-dir --break-system-packages pyubx2
 
 # Step 7: Clean up
 RUN apk del .build-deps
