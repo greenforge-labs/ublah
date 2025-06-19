@@ -6,12 +6,11 @@ Supports ZED-F9P and ZED-F9R devices with comprehensive validation and monitorin
 import asyncio
 import logging
 import serial_asyncio
-from serial_asyncio import SerialReader, SerialWriter
-import time
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 from pyubx2 import UBXReader, UBXMessage, UBX_MSGIDS, SET
 from pynmea2 import parse as nmea_parse
+from serial.tools import list_ports
 from diagnostics import SystemDiagnostics
 
 logger = logging.getLogger(__name__)
@@ -33,8 +32,8 @@ class GPSHandler:
     
     def __init__(self, config):
         self.config = config
-        self.reader: Optional[SerialReader] = None
-        self.writer: Optional[SerialWriter] = None
+        self.reader: Optional[asyncio.StreamReader] = None
+        self.writer: Optional[asyncio.StreamWriter] = None
         self.serial_port: Optional[serial_asyncio.SerialTransport] = None
         self.connected = False
         self.latest_data = {}
@@ -125,8 +124,8 @@ class GPSHandler:
     
     def _list_available_ports(self) -> List[str]:
         """List available serial ports."""
-        ports = serial_asyncio.list_serial_ports()
-        return [port.name for port in ports]
+        ports = list_ports.comports()
+        return [port.device for port in ports]
     
     async def _configure_device(self) -> None:
         """Configure GPS device with enhanced ZED-F9R support and error handling."""
