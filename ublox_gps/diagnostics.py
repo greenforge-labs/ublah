@@ -128,15 +128,31 @@ class SystemDiagnostics:
         metrics = self.performance_metrics[component]
         metrics.response_times.append(duration)
         metrics.total_operations += 1
-        metrics.last_operation_time = datetime.utcnow()
+        metrics.last_operation_time = datetime.now()
         
         if success:
             metrics.success_count += 1
         else:
-            error_key = error_details or "unknown_error"
-            metrics.error_counts[error_key] = metrics.error_counts.get(error_key, 0) + 1
+            error_type = error_details or "unknown_error"
+            metrics.error_counts[error_type] = metrics.error_counts.get(error_type, 0) + 1
+    
+    def log_error(self, error_message: str, component: str = "system") -> None:
+        """Log an error and record it in diagnostics."""
+        logger.error(f"{component}: {error_message}")
         
-        logger.debug(f"Recorded {component}.{operation}: {duration:.3f}s, success={success}")
+        # Record in diagnostic history
+        self.diagnostic_history.append({
+            'timestamp': datetime.now(),
+            'level': 'ERROR',
+            'component': component,
+            'message': error_message
+        })
+        
+        # Update performance metrics
+        if component in self.performance_metrics:
+            error_type = "logged_error"
+            self.performance_metrics[component].error_counts[error_type] = \
+                self.performance_metrics[component].error_counts.get(error_type, 0) + 1
     
     async def perform_health_checks(self) -> List[HealthCheck]:
         """Perform comprehensive system health checks."""
@@ -166,7 +182,7 @@ class SystemDiagnostics:
             # Update health status
             self.health_checks = current_checks
             self.diagnostic_history.append({
-                'timestamp': datetime.utcnow(),
+                'timestamp': datetime.now(),
                 'checks': current_checks,
                 'overall_status': self._determine_overall_status(current_checks)
             })
@@ -179,7 +195,7 @@ class SystemDiagnostics:
                 component="diagnostics",
                 status=HealthStatus.CRITICAL,
                 message=f"Health check system error: {str(e)}",
-                timestamp=datetime.utcnow()
+                timestamp=datetime.now()
             )
             return [error_check]
     
@@ -193,17 +209,17 @@ class SystemDiagnostics:
                 component=component,
                 status=HealthStatus.OFFLINE,
                 message="No GPS operations recorded",
-                timestamp=datetime.utcnow()
+                timestamp=datetime.now()
             )
         
         # Check if GPS operations are recent
-        time_since_last = datetime.utcnow() - metrics.last_operation_time
+        time_since_last = datetime.now() - metrics.last_operation_time
         if time_since_last > timedelta(minutes=5):
             return HealthCheck(
                 component=component,
                 status=HealthStatus.CRITICAL,
                 message=f"No GPS activity for {time_since_last.total_seconds():.0f} seconds",
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(),
                 details={'last_operation': metrics.last_operation_time.isoformat()}
             )
         
@@ -213,7 +229,7 @@ class SystemDiagnostics:
                 component=component,
                 status=HealthStatus.CRITICAL,
                 message=f"Low GPS success rate: {metrics.success_rate:.1f}%",
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(),
                 details={'success_rate': metrics.success_rate, 'error_counts': dict(metrics.error_counts)}
             )
         elif metrics.success_rate < 80:
@@ -221,7 +237,7 @@ class SystemDiagnostics:
                 component=component,
                 status=HealthStatus.WARNING,
                 message=f"Moderate GPS success rate: {metrics.success_rate:.1f}%",
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(),
                 details={'success_rate': metrics.success_rate}
             )
         
@@ -229,7 +245,7 @@ class SystemDiagnostics:
             component=component,
             status=HealthStatus.HEALTHY,
             message=f"GPS operating normally (success rate: {metrics.success_rate:.1f}%)",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(),
             details={'avg_response_time': metrics.average_response_time}
         )
     
@@ -243,17 +259,17 @@ class SystemDiagnostics:
                 component=component,
                 status=HealthStatus.WARNING,
                 message="No NTRIP operations recorded",
-                timestamp=datetime.utcnow()
+                timestamp=datetime.now()
             )
         
         # Check connection status based on recent activity
-        time_since_last = datetime.utcnow() - metrics.last_operation_time
+        time_since_last = datetime.now() - metrics.last_operation_time
         if time_since_last > timedelta(minutes=2):
             return HealthCheck(
                 component=component,
                 status=HealthStatus.CRITICAL,
                 message=f"NTRIP connection inactive for {time_since_last.total_seconds():.0f} seconds",
-                timestamp=datetime.utcnow()
+                timestamp=datetime.now()
             )
         
         # Check for connection stability
@@ -262,7 +278,7 @@ class SystemDiagnostics:
                 component=component,
                 status=HealthStatus.WARNING,
                 message=f"High NTRIP error rate: {metrics.error_rate:.1f}%",
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(),
                 details={'error_counts': dict(metrics.error_counts)}
             )
         
@@ -270,7 +286,7 @@ class SystemDiagnostics:
             component=component,
             status=HealthStatus.HEALTHY,
             message="NTRIP connection stable",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(),
             details={'success_rate': metrics.success_rate}
         )
     
@@ -284,7 +300,7 @@ class SystemDiagnostics:
             component=component,
             status=HealthStatus.HEALTHY,
             message="RTCM processing operational",
-            timestamp=datetime.utcnow()
+            timestamp=datetime.now()
         )
     
     async def _check_system_resources(self) -> HealthCheck:
@@ -301,7 +317,7 @@ class SystemDiagnostics:
                     component=component,
                     status=HealthStatus.CRITICAL,
                     message=f"High memory usage: {memory.percent:.1f}%",
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(),
                     details={'memory_percent': memory.percent}
                 )
             elif memory.percent > 80:
@@ -309,7 +325,7 @@ class SystemDiagnostics:
                     component=component,
                     status=HealthStatus.WARNING,
                     message=f"Elevated memory usage: {memory.percent:.1f}%",
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(),
                     details={'memory_percent': memory.percent}
                 )
             
@@ -317,7 +333,7 @@ class SystemDiagnostics:
                 component=component,
                 status=HealthStatus.HEALTHY,
                 message=f"System resources normal (memory: {memory.percent:.1f}%)",
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(),
                 details={'memory_percent': memory.percent}
             )
             
@@ -326,14 +342,14 @@ class SystemDiagnostics:
                 component=component,
                 status=HealthStatus.WARNING,
                 message="System monitoring unavailable (psutil not installed)",
-                timestamp=datetime.utcnow()
+                timestamp=datetime.now()
             )
         except Exception as e:
             return HealthCheck(
                 component=component,
                 status=HealthStatus.WARNING,
                 message=f"System monitoring error: {str(e)}",
-                timestamp=datetime.utcnow()
+                timestamp=datetime.now()
             )
     
     async def _check_configuration_health(self) -> HealthCheck:
@@ -359,7 +375,7 @@ class SystemDiagnostics:
                     component=component,
                     status=HealthStatus.CRITICAL,
                     message=f"Configuration issues: {', '.join(issues)}",
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(),
                     details={'issues': issues}
                 )
             
@@ -367,7 +383,7 @@ class SystemDiagnostics:
                 component=component,
                 status=HealthStatus.HEALTHY,
                 message="Configuration valid",
-                timestamp=datetime.utcnow()
+                timestamp=datetime.now()
             )
             
         except Exception as e:
@@ -375,7 +391,7 @@ class SystemDiagnostics:
                 component=component,
                 status=HealthStatus.WARNING,
                 message=f"Configuration check error: {str(e)}",
-                timestamp=datetime.utcnow()
+                timestamp=datetime.now()
             )
     
     def _determine_overall_status(self, checks: List[HealthCheck]) -> HealthStatus:
@@ -433,7 +449,7 @@ class SystemDiagnostics:
     def get_diagnostic_report(self) -> Dict[str, Any]:
         """Generate comprehensive diagnostic report."""
         return {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now().isoformat(),
             'health_summary': self.get_health_summary(),
             'system_info': {
                 'monitoring_enabled': self.monitoring_enabled,

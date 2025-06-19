@@ -6,10 +6,11 @@ Supports ZED-F9P and ZED-F9R devices with comprehensive validation and monitorin
 import asyncio
 import logging
 import serial_asyncio
+from serial_asyncio import SerialReader, SerialWriter
 import time
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
-from pyubx2 import UBXReader, UBXMessage, UBX_MSGIDS
+from pyubx2 import UBXReader, UBXMessage, UBX_MSGIDS, SET
 from pynmea2 import parse as nmea_parse
 from diagnostics import SystemDiagnostics
 
@@ -32,6 +33,8 @@ class GPSHandler:
     
     def __init__(self, config):
         self.config = config
+        self.reader: Optional[SerialReader] = None
+        self.writer: Optional[SerialWriter] = None
         self.serial_port: Optional[serial_asyncio.SerialTransport] = None
         self.connected = False
         self.latest_data = {}
@@ -79,8 +82,9 @@ class GPSHandler:
             except asyncio.CancelledError:
                 pass
         
-        if self.serial_port and self.serial_port.is_open:
-            self.serial_port.close()
+        if self.writer and not self.writer.is_closing():
+            self.writer.close()
+            await self.writer.wait_closed()
             logger.info("GPS serial port closed")
         
         self.connected = False
@@ -98,7 +102,8 @@ class GPSHandler:
                 raise GPSConnectionError(f"GPS device not found at {device_path}. Available ports: {available_ports}")
             
             # Open serial connection
-            self.serial_port = await serial_asyncio.open_serial_connection(url=device_path, baudrate=baudrate)
+            self.reader, self.writer = await serial_asyncio.open_serial_connection(url=device_path, baudrate=baudrate)
+            self.serial_port = self.writer.transport.serial  # Access underlying serial port
             
             self.connected = True
             logger.info(f"Connected to GPS device at {device_path} @ {baudrate} baud")
@@ -298,11 +303,11 @@ class GPSHandler:
     
     async def _send_ubx_message(self, message: UBXMessage) -> None:
         """Send UBX message to device with error handling."""
-        if not self.serial_port or not self.connected:
+        if not self.writer or not self.connected:
             raise GPSConnectionError("GPS device not connected")
         
         try:
-            self.serial_port.write(message.serialize())
+            self.writer.write(message.serialize())
             await asyncio.sleep(0.1)  # Small delay for device processing
         except GPSConnectionError as e:
             logger.error(f"Failed to send UBX message: {e}")
@@ -316,37 +321,35 @@ class GPSHandler:
     
     async def _read_data_loop(self) -> None:
         """Background task to read GPS data continuously with error handling."""
-        ubx_reader = UBXReader(self.serial_port)
+        ubx_reader = UBXReader(self.reader)
         
         while not self._stop_event.is_set() and self.connected:
             try:
-                if self.serial_port.in_waiting > 0:
-                    try:
-                        # Try to read UBX message
-                        raw_data, parsed_data = ubx_reader.read()
-                        if parsed_data:
-                            await self._process_ubx_message(parsed_data)
-                    except Exception as e:
-                        # If UBX parsing fails, try NMEA
-                        try:
-                            line = self.serial_port.readline().decode('ascii', errors='ignore').strip()
-                            if line.startswith('$'):
-                                nmea_msg = nmea_parse(line)
+                if self.reader.at_eof():
+                    break
+                
+                # Try to read UBX message first
+                try:
+                    raw_data, parsed_data = ubx_reader.read()
+                    if parsed_data:
+                        await self._process_ubx_message(parsed_data)
+                    else:
+                        # If no UBX data, try NMEA
+                        line = await self.reader.readline()
+                        if line:
+                            line_str = line.decode('ascii', errors='ignore').strip()
+                            if line_str.startswith('$'):
+                                nmea_msg = nmea_parse(line_str)
                                 await self._process_nmea_message(nmea_msg)
-                        except Exception as nmea_e:
-                            logger.debug(f"Failed to parse message: UBX={e}, NMEA={nmea_e}")
+                except Exception as e:
+                    logger.debug(f"Failed to parse message: {e}")
                 
                 await asyncio.sleep(0.01)  # Small delay to prevent CPU spinning
                 
-            except GPSConnectionError as e:
-                logger.error(f"Error in GPS data loop: {e}")
-                self.diagnostics.log_error("GPS data loop error")
-                await asyncio.sleep(1)
-            
             except Exception as e:
-                logger.error(f"Error in GPS data loop: {e}")
-                self.diagnostics.log_error("GPS data loop error")
-                await asyncio.sleep(1)
+                logger.error(f"Error reading GPS data: {e}")
+                self.diagnostics.record_operation("gps_handler", "read_data", 0.0, False, str(e))
+                await asyncio.sleep(1)  # Wait before retrying
     
     async def _process_ubx_message(self, message) -> None:
         """Process incoming UBX message with enhanced ZED-F9R support and error handling."""
@@ -591,16 +594,16 @@ class GPSHandler:
     
     def is_connected(self) -> bool:
         """Check if GPS device is connected."""
-        return self.connected and self.serial_port and self.serial_port.is_open
+        return self.connected and self.writer and not self.writer.is_closing()
     
     async def send_corrections(self, rtcm_data: bytes) -> None:
         """Send RTCM correction data to GPS device with error handling."""
-        if not self.serial_port or not self.connected:
+        if not self.writer or not self.connected:
             logger.warning("Cannot send corrections: GPS device not connected")
             return
         
         try:
-            self.serial_port.write(rtcm_data)
+            self.writer.write(rtcm_data)
             logger.debug(f"Sent {len(rtcm_data)} bytes of RTCM corrections")
         except GPSConnectionError as e:
             logger.error(f"Failed to send RTCM corrections: {e}")
