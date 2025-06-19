@@ -69,14 +69,56 @@ class UbloxGPSService:
     
     async def _run_service_loop(self) -> None:
         """Main service loop."""
+        # DEBUG: START - Service Loop Debugging (Remove after bug is resolved)
+        loop_count = 0
+        data_received_count = 0
+        empty_data_count = 0
+        
+        logger.info("🔄 Starting main service loop...")
+        # DEBUG: END - Service Loop Debugging
+        
         while self.running:
             try:
+                # DEBUG: START - Service Loop Debugging (Remove after bug is resolved)
+                loop_count += 1
+                # DEBUG: END - Service Loop Debugging
+                
                 # Get GPS data
                 gps_data = await self.gps_handler.get_latest_data()
                 
+                # DEBUG: START - Service Loop Debugging (Remove after bug is resolved)
+                # Log service loop activity every 30 seconds
+                if loop_count % 30 == 0:
+                    logger.info(f"🔄 Service loop #{loop_count}: GPS connected={self.gps_handler.is_connected()}")
+                    logger.info(f"🔄 Data stats: received={data_received_count}, empty={empty_data_count}")
+                # DEBUG: END - Service Loop Debugging
+                
                 if gps_data:
+                    # DEBUG: START - Service Loop Debugging (Remove after bug is resolved)
+                    data_received_count += 1
+                    # Log first few data updates and then every 10th
+                    if data_received_count <= 3 or data_received_count % 10 == 0:
+                        logger.info(f"📊 Service loop: GPS data received #{data_received_count}")
+                        logger.info(f"📊 Data keys: {list(gps_data.keys())}")
+                        if 'latitude' in gps_data and 'longitude' in gps_data:
+                            logger.info(f"📊 Position: {gps_data['latitude']:.7f}, {gps_data['longitude']:.7f}")
+                    # DEBUG: END - Service Loop Debugging
+                    
                     # Update HomeAssistant entities
-                    await self.ha_interface.update_entities(gps_data)
+                    # DEBUG: START - Service Loop Debugging (Remove after bug is resolved)
+                    try:
+                        await self.ha_interface.update_entities(gps_data)
+                        logger.debug(f"✅ HA entities updated successfully")
+                    except Exception as ha_error:
+                        logger.error(f"❌ HA update failed: {ha_error}")
+                    # DEBUG: END - Service Loop Debugging
+                else:
+                    # DEBUG: START - Service Loop Debugging (Remove after bug is resolved)
+                    empty_data_count += 1
+                    # Log empty data every 100 cycles to avoid spam
+                    if empty_data_count <= 5 or empty_data_count % 100 == 0:
+                        logger.debug(f"📭 Service loop: No GPS data available (#{empty_data_count})")
+                    # DEBUG: END - Service Loop Debugging
                 
                 # Send RTCM corrections if available
                 if self.ntrip_client:
