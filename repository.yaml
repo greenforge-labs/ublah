@@ -1,0 +1,4 @@
+name: "Ublox GPS RTK Add-ons"
+url: "https://github.com/greenforge-labs/ublah"
+maintainer: "Greenforge Labs"
+description: "HomeAssistant add-ons for u-blox GPS devices with RTK support"
