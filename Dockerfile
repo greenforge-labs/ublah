@@ -4,21 +4,28 @@ FROM $BUILD_FROM
 # Set shell
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# Install packages - use Alpine packages where possible to avoid compilation issues
+# Install system packages and Python dependencies
 RUN apk add --no-cache \
     python3 \
     py3-pip \
-    py3-setuptools \
-    py3-wheel \
-    py3-pyserial \
+    py3-yaml \
     py3-requests \
     py3-aiohttp \
-    py3-yaml \
+    py3-websockets \
+    py3-serial \
+    && apk add --no-cache --virtual .build-deps \
     gcc \
     musl-dev \
     python3-dev \
     libffi-dev \
-    openssl-dev
+    openssl-dev \
+    cargo \
+    rust \
+    && pip3 install --no-cache-dir \
+    pynmea2==1.19.0 \
+    pyubx2==1.2.37 \
+    aiofiles==23.1.0 \
+    && apk del .build-deps
 
 # Python 3 HTTP Server serves the current working dir
 # So let's set it to our add-on persistent data directory.
@@ -48,23 +55,17 @@ RUN echo "=== Testing disk space and environment ===" && \
     ls -la /tmp/
 
 # Try installing a tiny pure Python package instead of setuptools
-RUN echo "=== Testing minimal pure Python package ===" && \
-    pip3 install --no-cache-dir --no-deps --verbose six
+RUN echo "=== Testing write permissions ===" && \
+    python3 -c "import site; print('Site packages:', site.getsitepackages())" && \
+    ls -la $(python3 -c "import site; print(site.getsitepackages()[0])") && \
+    touch /tmp/test_write && rm /tmp/test_write && \
+    echo "=== Write test passed ==="
 
-# Install each package individually with verbose output to identify failures
-RUN echo "=== Installing pynmea2 ===" && \
-    pip3 install --no-cache-dir --verbose pynmea2==1.19.0 && \
-    echo "=== Installing pyubx2 ===" && \
-    pip3 install --no-cache-dir --verbose pyubx2==1.2.37 && \
-    echo "=== Installing aiohttp ===" && \
-    pip3 install --no-cache-dir --verbose aiohttp==3.8.5 && \
-    echo "=== Installing aiofiles ===" && \
-    pip3 install --no-cache-dir --verbose aiofiles==23.1.0 && \
-    echo "=== Installing pyyaml ===" && \
-    pip3 install --no-cache-dir --verbose pyyaml==6.0.1 && \
-    echo "=== Installing websockets ===" && \
-    pip3 install --no-cache-dir --verbose websockets==11.0.3 && \
-    echo "=== All packages installed successfully ==="
+# Capture full pip error output
+RUN echo "=== Testing pip with full error output ===" && \
+    pip3 install --no-cache-dir --no-deps --verbose --debug six 2>&1 || \
+    (echo "=== Pip install failed, trying alternative approach ===" && \
+     python3 -m pip install --no-cache-dir --no-deps --verbose six 2>&1)
 
 # Copy root filesystem
 COPY rootfs /
