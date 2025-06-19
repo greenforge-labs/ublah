@@ -4,49 +4,26 @@ FROM $BUILD_FROM
 # Set shell
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# Install system packages first
+# Install system packages - use Alpine packages wherever possible for aarch64 compatibility
 RUN apk add --no-cache \
     python3 \
     py3-pip \
     py3-yaml \
-    py3-requests
-
-# Install build dependencies
-RUN apk add --no-cache --virtual .build-deps \
+    py3-requests \
+    py3-aiohttp \
+    py3-pyserial \
+    && apk add --no-cache --virtual .build-deps \
     gcc \
     musl-dev \
     python3-dev \
     libffi-dev \
     openssl-dev \
-    cargo \
-    rust
-
-# Test basic functionality
-RUN echo "=== Testing basic pip functionality ===" && \
-    pip3 --version && \
-    pip3 list
-
-# Install packages one by one to isolate failures
-RUN echo "=== Installing pyserial ===" && \
-    pip3 install --no-cache-dir --verbose pyserial==3.5
-
-RUN echo "=== Installing aiohttp ===" && \
-    pip3 install --no-cache-dir --verbose aiohttp==3.8.5
-
-RUN echo "=== Installing aiofiles ===" && \
-    pip3 install --no-cache-dir --verbose aiofiles==23.1.0
-
-RUN echo "=== Installing websockets ===" && \
-    pip3 install --no-cache-dir --verbose websockets==11.0.3
-
-RUN echo "=== Installing pynmea2 ===" && \
-    pip3 install --no-cache-dir --verbose pynmea2==1.19.0
-
-RUN echo "=== Installing pyubx2 ===" && \
-    pip3 install --no-cache-dir --verbose pyubx2==1.2.37
-
-# Clean up build dependencies
-RUN apk del .build-deps
+    && pip3 install --no-cache-dir \
+    pynmea2==1.19.0 \
+    pyubx2==1.2.37 \
+    aiofiles==23.1.0 \
+    websockets==11.0.3 \
+    && apk del .build-deps
 
 # Python 3 HTTP Server serves the current working dir
 # So let's set it to our add-on persistent data directory.
