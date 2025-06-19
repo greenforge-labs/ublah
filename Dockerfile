@@ -4,51 +4,26 @@ FROM $BUILD_FROM
 # Set shell
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# Step 1: Install core Python packages (should always work)
-RUN apk add --no-cache python3 py3-pip
-
-# Step 2: Test basic Alpine package installation
-RUN echo "=== Testing core Alpine packages ===" && \
-    apk add --no-cache py3-yaml py3-requests
-
-# Step 3: Test potentially problematic Alpine packages
-RUN echo "=== Testing py3-aiohttp ===" && \
-    apk search py3-aiohttp && \
-    apk add --no-cache py3-aiohttp
-
-RUN echo "=== Testing py3-pyserial ===" && \
-    apk search py3-pyserial && \
-    apk add --no-cache py3-pyserial
-
-# Step 4: Install build dependencies
-RUN echo "=== Installing build dependencies ===" && \
-    apk add --no-cache --virtual .build-deps \
+# Install system packages and Python dependencies
+RUN apk add --no-cache \
+    python3 \
+    py3-pip \
+    py3-yaml \
+    py3-requests \
+    py3-aiohttp \
+    py3-pyserial \
+    && apk add --no-cache --virtual .build-deps \
     gcc \
     musl-dev \
     python3-dev \
     libffi-dev \
-    openssl-dev
-
-# Step 5: Test pip functionality
-RUN echo "=== Testing pip ===" && \
-    pip3 --version && \
-    pip3 list
-
-# Step 6: Install packages one by one
-RUN echo "=== Installing aiofiles ===" && \
-    pip3 install --no-cache-dir --break-system-packages aiofiles
-
-RUN echo "=== Installing websockets ===" && \
-    pip3 install --no-cache-dir --break-system-packages websockets
-
-RUN echo "=== Installing pynmea2 ===" && \
-    pip3 install --no-cache-dir --break-system-packages pynmea2
-
-RUN echo "=== Installing pyubx2 ===" && \
-    pip3 install --no-cache-dir --break-system-packages pyubx2
-
-# Step 7: Clean up
-RUN apk del .build-deps
+    openssl-dev \
+    && pip3 install --no-cache-dir --break-system-packages \
+    aiofiles \
+    websockets \
+    pynmea2 \
+    pyubx2 \
+    && apk del .build-deps
 
 # Python 3 HTTP Server serves the current working dir
 # So let's set it to our add-on persistent data directory.
