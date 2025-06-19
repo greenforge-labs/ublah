@@ -27,17 +27,19 @@ WORKDIR /data
 # Copy Python requirements
 COPY requirements.txt /tmp/
 
-# Test pip and upgrade first with verbose output
-RUN echo "=== Testing pip and upgrading ===" && \
+# Test basic pip functionality with default version (skip upgrade)
+RUN echo "=== Pip Status Check ===" && \
+    which pip3 && \
     pip3 --version && \
-    pip3 install --no-cache-dir --upgrade pip --verbose
+    python3 -m pip --version
+
+# Try installing packages with default pip (no upgrade)
+RUN echo "=== Testing package install with default pip ===" && \
+    pip3 install --no-cache-dir pyserial==3.5 && \
+    echo "=== pyserial successful ==="
 
 # Install each package individually with verbose output to identify failures
-RUN echo "=== Installing pyserial ===" && \
-    pip3 install --no-cache-dir --verbose pyserial==3.5 && \
-    echo "=== Installing requests ===" && \
-    pip3 install --no-cache-dir --verbose requests==2.31.0 && \
-    echo "=== Installing pynmea2 ===" && \
+RUN echo "=== Installing pynmea2 ===" && \
     pip3 install --no-cache-dir --verbose pynmea2==1.19.0 && \
     echo "=== Installing pyubx2 ===" && \
     pip3 install --no-cache-dir --verbose pyubx2==1.2.37 && \
