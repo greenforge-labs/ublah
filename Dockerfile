@@ -23,6 +23,7 @@ RUN apk add --no-cache \
     websockets \
     pynmea2 \
     pyubx2 \
+    pyserial-asyncio \
     && apk del .build-deps
 
 # Python 3 HTTP Server serves the current working dir
