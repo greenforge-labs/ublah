@@ -1,5 +1,5 @@
 name: "u-blox GPS RTK"
-version: "0.3.11"  # Clean production version
+version: "0.3.12"  # Clean production version
 slug: ublox_gps_rtk
 description: "HomeAssistant add-in for u-blox ZED-F9P GPS with NTRIP RTK corrections"
 url: "https://github.com/greenforge-labs/ublah"
@@ -27,7 +27,7 @@ options:
   gps_device: "/dev/ttyACM0"
   gps_baudrate: 38400
   device_type: "ZED-F9R"
-  dead_reckoning_enabled: true
+  dead_reckoning_enabled: false
   disable_nmea_output: true
   update_rate_hz: 1
   constellation: "GPS+GLONASS+GALILEO+BEIDOU"
