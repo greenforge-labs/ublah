@@ -4,12 +4,16 @@ FROM $BUILD_FROM
 # Set shell
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# Install packages
+# Install packages - use Alpine packages where possible to avoid compilation issues
 RUN apk add --no-cache \
     python3 \
     py3-pip \
     py3-setuptools \
     py3-wheel \
+    py3-pyserial \
+    py3-requests \
+    py3-aiohttp \
+    py3-yaml \
     gcc \
     musl-dev \
     python3-dev \
@@ -23,9 +27,29 @@ WORKDIR /data
 # Copy Python requirements
 COPY requirements.txt /tmp/
 
-# Install Python requirements with better error handling and build options
-RUN pip3 install --no-cache-dir --upgrade pip && \
-    pip3 install --no-cache-dir --timeout=300 --retries=3 -r /tmp/requirements.txt
+# Test pip and upgrade first with verbose output
+RUN echo "=== Testing pip and upgrading ===" && \
+    pip3 --version && \
+    pip3 install --no-cache-dir --upgrade pip --verbose
+
+# Install each package individually with verbose output to identify failures
+RUN echo "=== Installing pyserial ===" && \
+    pip3 install --no-cache-dir --verbose pyserial==3.5 && \
+    echo "=== Installing requests ===" && \
+    pip3 install --no-cache-dir --verbose requests==2.31.0 && \
+    echo "=== Installing pynmea2 ===" && \
+    pip3 install --no-cache-dir --verbose pynmea2==1.19.0 && \
+    echo "=== Installing pyubx2 ===" && \
+    pip3 install --no-cache-dir --verbose pyubx2==1.2.37 && \
+    echo "=== Installing aiohttp ===" && \
+    pip3 install --no-cache-dir --verbose aiohttp==3.8.5 && \
+    echo "=== Installing aiofiles ===" && \
+    pip3 install --no-cache-dir --verbose aiofiles==23.1.0 && \
+    echo "=== Installing pyyaml ===" && \
+    pip3 install --no-cache-dir --verbose pyyaml==6.0.1 && \
+    echo "=== Installing websockets ===" && \
+    pip3 install --no-cache-dir --verbose websockets==11.0.3 && \
+    echo "=== All packages installed successfully ==="
 
 # Copy root filesystem
 COPY rootfs /
