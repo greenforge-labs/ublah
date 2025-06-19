@@ -32,6 +32,9 @@ WORKDIR /data
 # Copy root filesystem
 COPY rootfs /
 
+# Make s6 service run script executable
+RUN chmod +x /etc/services.d/ublox-gps/run
+
 # Copy Python application
 COPY ublox_gps /opt/ublox_gps
 
