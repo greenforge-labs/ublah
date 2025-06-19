@@ -94,29 +94,51 @@ class GPSHandler:
         device_path = self.config.gps_device
         baudrate = self.config.gps_baudrate
         
-        try:
-            # Check if device exists
-            if not self._device_exists(device_path):
-                available_ports = self._list_available_ports()
-                raise GPSConnectionError(f"GPS device not found at {device_path}. Available ports: {available_ports}")
-            
-            # Open serial connection
-            self.reader, self.writer = await serial_asyncio.open_serial_connection(url=device_path, baudrate=baudrate)
-            self.serial_port = self.writer.transport.serial  # Access underlying serial port
-            
-            self.connected = True
-            logger.info(f"Connected to GPS device at {device_path} @ {baudrate} baud")
-            
-        except GPSConnectionError as e:
-            logger.error(f"Failed to connect to GPS device: {e}")
-            self.diagnostics.log_error("GPS connection error")
-            raise
+        logger.info(f"🔌 Connecting to {device_path} @ {baudrate} baud...")
         
+        try:
+            # Open serial connection
+            self.reader, self.writer = await serial_asyncio.open_serial_connection(
+                url=device_path,
+                baudrate=baudrate,
+                bytesize=8,
+                parity='N',
+                stopbits=1,
+                timeout=2
+            )
+            
+            logger.info(f"✅ Serial port opened at {baudrate} baud")
+            
+            # Continue with device configuration...
+            try:
+                # Record successful connection
+                self.diagnostics.record_operation("gps_handler", "connect", 1.0, True)
+                
+                # Configure device (only if we have a connection)
+                await self._configure_device()
+                
+                # Start background data reading
+                self.reader_task = asyncio.create_task(self._read_data_loop())
+                
+                logger.info("GPS handler started successfully")
+                
+            except Exception as e:
+                logger.error(f"Error during GPS configuration: {e}")
+                self.diagnostics.record_operation("gps_handler", "connect", 0.0, False, str(e))
+                await self.stop()
+                raise
+            
         except Exception as e:
-            logger.error(f"Failed to connect to GPS device: {e}")
-            self.diagnostics.log_error("GPS connection error")
-            raise
-    
+            logger.error(f"❌ Failed to connect to GPS device: {e}")
+            logger.error("❌ Check:")
+            logger.error("   - Device path: " + device_path)
+            logger.error("   - Hardware connections")
+            logger.error("   - Device permissions")
+            logger.error("   - GPS device power")
+            raise GPSConnectionError("Failed to connect to GPS device")
+        
+        logger.info(f"🎉 Connected to GPS device at {device_path} @ {baudrate} baud")
+        
     def _device_exists(self, device_path: str) -> bool:
         """Check if the specified device path exists."""
         import os
@@ -321,21 +343,10 @@ class GPSHandler:
     async def _read_data_loop(self) -> None:
         """Background task to read GPS data continuously with error handling."""
         
-        # DEBUG: START - GPS Data Flow Debugging (Remove after bug is resolved)
-        logger.info("🔄 Starting GPS data read loop...")
-        bytes_received_total = 0
-        cycles_with_data = 0
-        cycles_without_data = 0
-        message_parse_attempts = 0
-        successful_updates = 0
-        # DEBUG: END - GPS Data Flow Debugging
-        
         while not self._stop_event.is_set() and self.connected:
             try:
                 if self.reader.at_eof():
-                    # DEBUG: START - GPS Data Flow Debugging (Remove after bug is resolved)
                     logger.warning("📡 Reader reached EOF - connection may be lost")
-                    # DEBUG: END - GPS Data Flow Debugging
                     break
                 
                 # Read data from stream
@@ -343,25 +354,8 @@ class GPSHandler:
                     # Try to read a chunk of data
                     data = await self.reader.read(1024)
                     if not data:
-                        # DEBUG: START - GPS Data Flow Debugging (Remove after bug is resolved)
-                        cycles_without_data += 1
-                        if cycles_without_data % 100 == 0:  # Log every 100 empty cycles
-                            logger.debug(f"📡 No data received for {cycles_without_data} cycles")
-                        # DEBUG: END - GPS Data Flow Debugging
                         await asyncio.sleep(0.01)
                         continue
-                    
-                    # DEBUG: START - GPS Data Flow Debugging (Remove after bug is resolved)
-                    # We got data!
-                    cycles_with_data += 1
-                    bytes_received_total += len(data)
-                    cycles_without_data = 0  # Reset counter
-                    
-                    # Log data reception every 50 cycles or first few cycles
-                    if cycles_with_data <= 5 or cycles_with_data % 50 == 0:
-                        logger.info(f"📥 Cycle {cycles_with_data}: Received {len(data)} bytes (total: {bytes_received_total})")
-                        logger.debug(f"📥 Data sample: {data[:50].hex()}...")
-                    # DEBUG: END - GPS Data Flow Debugging
                     
                     # Process data byte by byte to find UBX messages
                     for byte in data:
@@ -391,13 +385,7 @@ class GPSHandler:
                                                 raw_data, parsed_data = ubx_reader.read()
                                                 if parsed_data:
                                                     await self._process_ubx_message(parsed_data)
-                                                    # DEBUG: START - GPS Data Flow Debugging (Remove after bug is resolved)
-                                                    successful_updates += 1
-                                                    # DEBUG: END - GPS Data Flow Debugging
                                             except Exception as parse_error:
-                                                # DEBUG: START - GPS Data Flow Debugging (Remove after bug is resolved)
-                                                message_parse_attempts += 1
-                                                # DEBUG: END - GPS Data Flow Debugging
                                                 logger.debug(f"Failed to parse UBX message: {parse_error}")
                             
                             # Check for NMEA message start
@@ -436,88 +424,29 @@ class GPSHandler:
                 self.diagnostics.record_operation("gps_handler", "read_data", 0.0, False, str(e))
                 await asyncio.sleep(1)  # Wait before retrying
         
-        # DEBUG: START - GPS Data Flow Debugging (Remove after bug is resolved)
-        # Log final statistics when loop exits
-        logger.info(f"📊 GPS read loop ended - Stats:")
-        logger.info(f"   • Cycles with data: {cycles_with_data}")
-        logger.info(f"   • Total bytes received: {bytes_received_total}")
-        logger.info(f"   • Message parse attempts: {message_parse_attempts}")
-        logger.info(f"   • Successful data updates: {successful_updates}")
-        logger.info(f"   • Current latest_data keys: {list(self.latest_data.keys())}")
-        # DEBUG: END - GPS Data Flow Debugging
-    
     async def _process_ubx_message(self, message) -> None:
         """Process incoming UBX message with enhanced ZED-F9R support and error handling."""
         try:
-            # DEBUG: START - Message Processing Debugging (Remove after bug is resolved)
-            logger.debug(f"🛰️ Processing UBX message: {message.identity}")
-            # DEBUG: END - Message Processing Debugging
-            
             if message.identity == 'NAV-PVT':
-                # DEBUG: START - Message Processing Debugging (Remove after bug is resolved)
-                logger.debug("📍 Processing NAV-PVT message")
-                # DEBUG: END - Message Processing Debugging
                 await self._process_nav_pvt(message)
-                # DEBUG: START - Message Processing Debugging (Remove after bug is resolved)
-                logger.debug(f"📍 NAV-PVT processed, latest_data keys: {list(self.latest_data.keys())}")
-                # DEBUG: END - Message Processing Debugging
                 
             elif message.identity == 'NAV-HPPOSLLH':
-                # DEBUG: START - Message Processing Debugging (Remove after bug is resolved)
-                logger.debug("📍 Processing NAV-HPPOSLLH message")
-                # DEBUG: END - Message Processing Debugging
                 await self._process_nav_hpposllh(message)
-                # DEBUG: START - Message Processing Debugging (Remove after bug is resolved)
-                logger.debug(f"📍 NAV-HPPOSLLH processed, latest_data keys: {list(self.latest_data.keys())}")
-                # DEBUG: END - Message Processing Debugging
                 
             elif message.identity == 'NAV-STATUS':
-                # DEBUG: START - Message Processing Debugging (Remove after bug is resolved)
-                logger.debug("📊 Processing NAV-STATUS message")
-                # DEBUG: END - Message Processing Debugging
                 await self._process_nav_status(message)
-                # DEBUG: START - Message Processing Debugging (Remove after bug is resolved)
-                logger.debug(f"📊 NAV-STATUS processed, latest_data keys: {list(self.latest_data.keys())}")
-                # DEBUG: END - Message Processing Debugging
                 
             elif message.identity == 'HNR-PVT':
-                # DEBUG: START - Message Processing Debugging (Remove after bug is resolved)
-                logger.debug("🔄 Processing HNR-PVT message")
-                # DEBUG: END - Message Processing Debugging
                 await self._process_hnr_pvt(message)
-                # DEBUG: START - Message Processing Debugging (Remove after bug is resolved)
-                logger.debug(f"🔄 HNR-PVT processed, latest_data keys: {list(self.latest_data.keys())}")
-                # DEBUG: END - Message Processing Debugging
                 
             elif message.identity == 'ESF-INS':
-                # DEBUG: START - Message Processing Debugging (Remove after bug is resolved)
-                logger.debug("📡 Processing ESF-INS message")
-                # DEBUG: END - Message Processing Debugging
                 await self._process_esf_ins(message)
-                # DEBUG: START - Message Processing Debugging (Remove after bug is resolved)
-                logger.debug(f"📡 ESF-INS processed, latest_data keys: {list(self.latest_data.keys())}")
-                # DEBUG: END - Message Processing Debugging
                 
             else:
-                # DEBUG: START - Message Processing Debugging (Remove after bug is resolved)
                 logger.debug(f"❓ Unhandled UBX message type: {message.identity}")
-                # DEBUG: END - Message Processing Debugging
             
             # Record successful processing
             self.diagnostics.record_operation("gps_handler", "process_ubx", 1.0, True)
-            
-            # DEBUG: START - Message Processing Debugging (Remove after bug is resolved)
-            # Log current latest_data summary every 10 messages
-            if hasattr(self, '_message_count'):
-                self._message_count += 1
-            else:
-                self._message_count = 1
-                
-            if self._message_count % 10 == 0:
-                logger.info(f"📊 Message #{self._message_count} processed. Current data: {list(self.latest_data.keys())}")
-                if self.latest_data:
-                    logger.info(f"📊 Sample data: {dict(list(self.latest_data.items())[:3])}")
-            # DEBUG: END - Message Processing Debugging
             
         except Exception as e:
             logger.error(f"Error processing UBX message {message.identity}: {e}")
@@ -526,11 +455,6 @@ class GPSHandler:
     async def _process_nav_pvt(self, message) -> None:
         """Process NAV-PVT message for standard position data with error handling."""
         try:
-            # DEBUG: START - NAV-PVT Processing Debugging (Remove after bug is resolved)
-            logger.debug(f"📍 NAV-PVT: fixType={getattr(message, 'fixType', 'unknown')}, numSV={getattr(message, 'numSV', 'unknown')}")
-            # DEBUG: END - NAV-PVT Processing Debugging
-            
-            # Validate message has required fields
             required_fields = ['iTOW', 'year', 'month', 'day', 'hour', 'min', 'sec', 'valid',
                               'nano', 'fixType', 'flags', 'flags2', 'numSV', 'lon', 'lat', 'height',
                               'hMSL', 'hAcc', 'vAcc', 'velN', 'velE', 'velD', 'gSpeed', 'headMot',
@@ -538,21 +462,13 @@ class GPSHandler:
             
             missing_fields = [field for field in required_fields if not hasattr(message, field)]
             if missing_fields:
-                # DEBUG: START - NAV-PVT Processing Debugging (Remove after bug is resolved)
                 logger.warning(f"📍 NAV-PVT missing fields: {missing_fields}")
-                # DEBUG: END - NAV-PVT Processing Debugging
                 return
             
-            # Convert coordinates from 1e-7 degrees to decimal degrees
             latitude = message.lat / 1e7
             longitude = message.lon / 1e7
             altitude = message.height / 1000.0  # Convert from mm to meters
             
-            # DEBUG: START - NAV-PVT Processing Debugging (Remove after bug is resolved)
-            logger.debug(f"📍 NAV-PVT coordinates: lat={latitude:.7f}, lon={longitude:.7f}, alt={altitude:.3f}m")
-            # DEBUG: END - NAV-PVT Processing Debugging
-            
-            # Update latest_data
             self.latest_data.update({
                 'timestamp': datetime.utcnow(),
                 'latitude': latitude,
@@ -567,18 +483,10 @@ class GPSHandler:
                 'pdop': message.pDOP / 100.0,  # Convert from 0.01 to actual value
             })
             
-            # DEBUG: START - NAV-PVT Processing Debugging (Remove after bug is resolved)
-            logger.debug(f"📍 NAV-PVT: Updated latest_data with {len(self.latest_data)} fields")
-            logger.debug(f"📍 NAV-PVT: Fix type={message.fixType}, Satellites={message.numSV}")
-            # DEBUG: END - NAV-PVT Processing Debugging
-            
-            # Record successful operation
             self.diagnostics.record_operation("gps_handler", "nav_pvt", 1.0, True)
             
         except Exception as e:
-            # DEBUG: START - NAV-PVT Processing Debugging (Remove after bug is resolved)
             logger.error(f"❌ Error processing NAV-PVT: {e}")
-            # DEBUG: END - NAV-PVT Processing Debugging
             self.diagnostics.record_operation("gps_handler", "nav_pvt", 0.0, False, str(e))
 
     async def _process_hnr_pvt(self, message) -> None:
@@ -597,8 +505,6 @@ class GPSHandler:
                 'hnr_wkn_set': bool(message.flags & 0x08),  # Week number set
                 'hnr_tow_set': bool(message.flags & 0x10),  # Time of week set
             })
-            
-            logger.debug(f"HNR-PVT: lat={message.lat/1e7:.8f}, lon={message.lon/1e7:.8f}, spd={message.gSpeed/1000.0:.2f}m/s")
             
         except GPSDataValidationError as e:
             logger.debug(f"Error processing HNR-PVT message: {e}")
@@ -624,8 +530,6 @@ class GPSHandler:
                 'fusion_ins_fix_type': getattr(message, 'insFixType', 0),
             })
             
-            logger.debug(f"ESF-INS: ax={getattr(message, 'xAccel', 0):.3f}, ay={getattr(message, 'yAccel', 0):.3f}, az={getattr(message, 'zAccel', 0):.3f}")
-            
         except GPSDataValidationError as e:
             logger.debug(f"Error processing ESF-INS message: {e}")
             self.diagnostics.log_error("GPS ESF-INS data validation error")
@@ -637,7 +541,6 @@ class GPSHandler:
     async def _process_nav_hpposllh(self, message) -> None:
         """Process NAV-HPPOSLLH message for high precision position data with error handling."""
         try:
-            # Combine standard and high precision parts
             hp_lat = (message.lat + message.latHp * 1e-2) / 1e7
             hp_lon = (message.lon + message.lonHp * 1e-2) / 1e7
             hp_height = (message.height + message.heightHp * 1e-1) / 1000.0
@@ -722,7 +625,6 @@ class GPSHandler:
         
         base_name = base_fix_types.get(fix_type, f"Unknown ({fix_type})")
         
-        # Enhanced RTK detection for high-precision applications
         if fix_type == 3:  # 3D Fix
             if carr_soln == 1:
                 return "RTK Float"
@@ -741,7 +643,6 @@ class GPSHandler:
         try:
             if hasattr(message, 'sentence_type'):
                 if message.sentence_type == 'GGA':
-                    # Global Positioning System Fix Data
                     self.latest_data.update({
                         'timestamp': datetime.utcnow(),
                         'latitude': message.latitude,
