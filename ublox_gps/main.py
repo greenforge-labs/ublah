@@ -77,8 +77,12 @@ class UbloxGPSService:
                 if loop_count % 10 == 0:  # Log every 10 loops
                     logger.info(f"🔍 DEBUG: Service loop iteration #{loop_count}")
                 
-                # Get GPS data
-                gps_data = await self.gps_handler.get_latest_data()
+                # =========================== DEBUG LOGGING START ===========================
+                logger.info(f"🔍 DEBUG: Calling gps_handler.get_latest_data() (sync method)")
+                # =========================== DEBUG LOGGING END =============================
+                
+                # Get GPS data (now sync method, no await needed)
+                gps_data = self.gps_handler.get_latest_data()
                 
                 if gps_data:
                     logger.info(f"🔍 DEBUG: Service loop got GPS data with keys: {list(gps_data.keys())}")
@@ -99,24 +103,14 @@ class UbloxGPSService:
                     if corrections:
                         await self.gps_handler.send_corrections(corrections)
                 
-                # Update connection status
-                status = {
-                    'gps_connected': self.gps_handler.is_connected(),
-                    'ntrip_connected': self.ntrip_client.is_connected() if self.ntrip_client else False,
-                    'last_fix_time': gps_data.get('timestamp') if gps_data else None
-                }
-                
-                logger.debug(f"🔍 DEBUG: Updating status: {status}")
-                
-                await self.ha_interface.update_status(status)
-                
-                # Sleep for update interval
-                await asyncio.sleep(1.0 / self.config.update_rate_hz)
+                # Sleep to prevent excessive polling
+                await asyncio.sleep(1)
                 
             except Exception as e:
+                loop_count += 1
                 logger.error(f"🔍 DEBUG: Error in service loop iteration #{loop_count}: {e}")
                 logger.error(f"Error in service loop: {e}")
-                await asyncio.sleep(1)  # Wait before retrying
+                await asyncio.sleep(1)
     
     async def stop(self) -> None:
         """Stop the GPS service."""

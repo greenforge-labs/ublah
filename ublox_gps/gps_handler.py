@@ -358,6 +358,7 @@ class GPSHandler:
         logger.info(f"🔍 DEBUG:   1. Device may need clear sky view for satellite acquisition")
         logger.info(f"🔍 DEBUG:   2. Indoor reception may be too weak for navigation solution")
         logger.info(f"🔍 DEBUG:   3. Device may need CFG-CFG save command (not implemented)")
+        logger.info(f"🔍 DEBUG: Will poll device status if no NAV messages after 10 seconds...")
         # =========================== DEBUG LOGGING END =============================
 
     def _get_ubx_class_code(self, msg_class: str) -> int:
