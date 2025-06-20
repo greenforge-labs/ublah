@@ -343,7 +343,23 @@ class GPSHandler:
                 logger.error(f"🔍 DEBUG: Exception enabling {msg_type}: {e}")
                 # =========================== DEBUG LOGGING END =============================
                 self.diagnostics.log_error(f"Failed to enable {msg_type}")
-    
+        
+        # =========================== DEBUG LOGGING START ===========================
+        logger.info(f"🔍 DEBUG: UBX message enabling completed. Total sent: {len(messages_to_enable)}")
+        logger.info(f"🔍 DEBUG: Waiting 2 seconds for device to start outputting messages...")
+        # =========================== DEBUG LOGGING END =============================
+        
+        # Give device time to start outputting enabled messages
+        await asyncio.sleep(2.0)
+        
+        # =========================== DEBUG LOGGING START ===========================
+        logger.info(f"🔍 DEBUG: Device should now be outputting NAV messages at 1Hz")
+        logger.info(f"🔍 DEBUG: If no NAV messages appear in logs, check:")
+        logger.info(f"🔍 DEBUG:   1. Device may need clear sky view for satellite acquisition")
+        logger.info(f"🔍 DEBUG:   2. Indoor reception may be too weak for navigation solution")
+        logger.info(f"🔍 DEBUG:   3. Device may need CFG-CFG save command (not implemented)")
+        # =========================== DEBUG LOGGING END =============================
+
     def _get_ubx_class_code(self, msg_class: str) -> int:
         """Get UBX message class code."""
         class_codes = {
@@ -382,154 +398,102 @@ class GPSHandler:
             raise
     
     async def _read_data_loop(self) -> None:
-        """Read data from GPS device continuously with enhanced error handling."""
-        logger.info("Starting GPS data reading loop...")
-        
+        """Read and process GPS data continuously with enhanced debugging."""
         # =========================== DEBUG LOGGING START ===========================
         logger.info("🔍 DEBUG: GPS data reading loop started")
+        # =========================== DEBUG LOGGING END =============================
         data_received_count = 0
         ubx_message_count = 0
-        nmea_message_count = 0
-        parse_error_count = 0
-        # =========================== DEBUG LOGGING END =============================
+        nav_message_count = 0
+        ack_message_count = 0
         
         while not self._stop_event.is_set():
             try:
-                if not self.reader:
-                    await asyncio.sleep(1)
-                    continue
+                data = await asyncio.wait_for(self.reader.read(1024), timeout=0.1)
                 
-                # Read bytes with timeout
-                try:
-                    data = await asyncio.wait_for(self.reader.read(1024), timeout=0.1)
-                    if not data:
-                        await asyncio.sleep(0.01)
-                        continue
+                if data:
+                    data_received_count += 1
                     
                     # =========================== DEBUG LOGGING START ===========================
-                    data_received_count += 1
-                    if data_received_count % 50 == 0:  # Log every 50 data reads
-                        logger.info(f"🔍 DEBUG: Received {data_received_count} data chunks so far")
-                    
-                    # Log first few bytes for inspection
-                    if data_received_count <= 5:
-                        logger.info(f"🔍 DEBUG: Raw data chunk #{data_received_count}: {data[:50]!r}...")
+                    if data_received_count <= 10 or data_received_count % 100 == 0:
+                        logger.info(f"🔍 DEBUG: Raw data chunk #{data_received_count}: {data[:50]}...")
                     # =========================== DEBUG LOGGING END =============================
                     
-                    # Record data reception
-                    self.diagnostics.record_operation("gps_handler", "read_data", len(data), True)
-                    
-                except asyncio.TimeoutError:
-                    continue
-                
-                # Try to parse as UBX message first
-                try:
-                    if b'\xb5\x62' in data:  # UBX sync characters
+                    # Process UBX messages if UBX sync bytes found
+                    if b'\xb5\x62' in data:
                         # =========================== DEBUG LOGGING START ===========================
-                        logger.debug(f"🔍 DEBUG: Found UBX sync characters in data")
+                        logger.info(f"🔍 DEBUG: UBX sync detected in chunk #{data_received_count}")
                         # =========================== DEBUG LOGGING END =============================
                         
-                        ubx_start = data.find(b'\xb5\x62')
-                        if ubx_start >= 0:
-                            remaining_data = data[ubx_start:]
+                        try:
+                            from pyubx2 import UBXReader
+                            from io import BytesIO
                             
-                            try:
-                                from pyubx2 import UBXReader
-                                # =========================== DEBUG LOGGING START ===========================
-                                logger.debug(f"🔍 DEBUG: Creating UBXReader with BytesIO wrapper for {len(remaining_data)} bytes")
-                                # =========================== DEBUG LOGGING END =============================
-                                
-                                from io import BytesIO
-                                reader = UBXReader(BytesIO(remaining_data))
-                                
+                            reader = UBXReader(BytesIO(data))
+                            
+                            while True:
                                 try:
-                                    while True:
-                                        try:
-                                            raw_data_msg, message = reader.read()
-                                            if message:
-                                                # =========================== DEBUG LOGGING START ===========================
-                                                ubx_message_count += 1
-                                                logger.info(f"🔍 DEBUG: Parsed UBX message #{ubx_message_count}: {message.identity}")
-                                                # =========================== DEBUG LOGGING END =============================
-                                                
-                                                await self._process_ubx_message(message)
-                                            else:
-                                                break
-                                        except StopIteration:
-                                            break
-                                        except Exception as msg_error:
-                                            # =========================== DEBUG LOGGING START ===========================
-                                            logger.debug(f"🔍 DEBUG: Individual message parse error: {msg_error}")
-                                            # =========================== DEBUG LOGGING END =============================
-                                            break
-                                except Exception as reader_error:
-                                    # =========================== DEBUG LOGGING START ===========================
-                                    logger.debug(f"🔍 DEBUG: UBX reader iteration error: {reader_error}")
-                                    # =========================== DEBUG LOGGING END =============================
-                                    pass
-                            
-                            except Exception as ubx_error:
-                                # =========================== DEBUG LOGGING START ===========================
-                                parse_error_count += 1
-                                logger.warning(f"🔍 DEBUG: UBX parse error #{parse_error_count}: {ubx_error}")
-                                # =========================== DEBUG LOGGING END =============================
-                                logger.debug(f"Failed to parse UBX message: {ubx_error}")
-                    
-                    # Try to parse as NMEA message
-                    if b'$' in data:
-                        # =========================== DEBUG LOGGING START ===========================
-                        logger.debug(f"🔍 DEBUG: Found NMEA $ character in data")
-                        # =========================== DEBUG LOGGING END =============================
-                        
-                        # Find potential NMEA sentences
-                        for byte_idx, byte_val in enumerate(data):
-                            try:
-                                if byte_val == ord('$'):
-                                    # Read until end of line
-                                    line = bytearray()
-                                    for i in range(byte_idx, len(data)):
-                                        if i >= len(data):
-                                            break
-                                        char_data = data[i:i+1]
-                                        if not char_data:
-                                            break
-                                        char = char_data[0]
-                                        line += char_data
-                                        if char in (ord('\n'), ord('\r')):
-                                            break
-                                    
-                                    # Process NMEA message
-                                    try:
-                                        line_str = line.decode('ascii', errors='ignore').strip()
-                                        if line_str.startswith('$'):
-                                            # =========================== DEBUG LOGGING START ===========================
-                                            nmea_message_count += 1
-                                            logger.info(f"🔍 DEBUG: Found NMEA message #{nmea_message_count}: {line_str[:50]}...")
-                                            # =========================== DEBUG LOGGING END =============================
-                                            
-                                            nmea_msg = nmea_parse(line_str)
-                                            await self._process_nmea_message(nmea_msg)
-                                    except Exception as nmea_error:
-                                        # =========================== DEBUG LOGGING START ===========================
-                                        parse_error_count += 1
-                                        logger.warning(f"🔍 DEBUG: NMEA parse error #{parse_error_count}: {nmea_error}")
-                                        # =========================== DEBUG LOGGING END =============================
-                                        logger.debug(f"Failed to parse NMEA message: {nmea_error}")
+                                    raw_data, message = reader.read()
+                                    if message:
+                                        ubx_message_count += 1
                                         
-                            except Exception as byte_error:
-                                logger.debug(f"Error processing byte: {byte_error}")
-                                continue
-                                
-                except Exception as e:
-                    logger.debug(f"Failed to parse message: {e}")
+                                        # =========================== DEBUG LOGGING START ===========================
+                                        logger.info(f"🔍 DEBUG: Parsed UBX message #{ubx_message_count}: {message.identity}")
+                                        
+                                        # Track message types for debugging
+                                        if message.identity.startswith('NAV-'):
+                                            nav_message_count += 1
+                                            logger.info(f"🔍 DEBUG: 📡 NAV message #{nav_message_count}: {message.identity}")
+                                        elif message.identity.startswith('ACK-'):
+                                            ack_message_count += 1
+                                            logger.info(f"🔍 DEBUG: ✅ ACK message #{ack_message_count}: {message.identity}")
+                                        
+                                        # Debug latest_data before and after processing
+                                        data_keys_before = list(self.latest_data.keys()) if hasattr(self, 'latest_data') else []
+                                        # =========================== DEBUG LOGGING END =============================
+                                        
+                                        await self._process_ubx_message(message)
+                                        
+                                        # =========================== DEBUG LOGGING START ===========================
+                                        data_keys_after = list(self.latest_data.keys()) if hasattr(self, 'latest_data') else []
+                                        if data_keys_before != data_keys_after:
+                                            logger.info(f"🔍 DEBUG: latest_data updated! New keys: {set(data_keys_after) - set(data_keys_before)}")
+                                        # =========================== DEBUG LOGGING END =============================
+                                        
+                                    else:
+                                        break
+                                        
+                                except Exception as parse_error:
+                                    # =========================== DEBUG LOGGING START ===========================
+                                    logger.warning(f"🔍 DEBUG: UBX parse error: {parse_error}")
+                                    # =========================== DEBUG LOGGING END =============================
+                                    break
+                                    
+                        except Exception as ubx_error:
+                            # =========================== DEBUG LOGGING START ===========================
+                            logger.error(f"🔍 DEBUG: UBX processing error: {ubx_error}")
+                            # =========================== DEBUG LOGGING END =============================
+                    
+                    # Process NMEA if found
+                    if b'$' in data:
+                        await self._process_nmea_data(data)
                 
-                await asyncio.sleep(0.01)  # Small delay to prevent CPU spinning
+            except asyncio.TimeoutError:
+                # No data received, continue
+                continue
                 
             except Exception as e:
                 logger.error(f"Error reading GPS data: {e}")
-                self.diagnostics.record_operation("gps_handler", "read_data", 0.0, False, str(e))
-                await asyncio.sleep(1)  # Wait before retrying
-    
+                await asyncio.sleep(0.1)  # Brief pause on error
+        
+        # =========================== DEBUG LOGGING START ===========================
+        logger.info(f"🔍 DEBUG: GPS data loop ending. Stats:")
+        logger.info(f"🔍 DEBUG:   Total data chunks: {data_received_count}")
+        logger.info(f"🔍 DEBUG:   Total UBX messages: {ubx_message_count}")
+        logger.info(f"🔍 DEBUG:   NAV messages: {nav_message_count}")
+        logger.info(f"🔍 DEBUG:   ACK messages: {ack_message_count}")
+        # =========================== DEBUG LOGGING END =============================
+
     async def _process_ubx_message(self, message) -> None:
         """Process incoming UBX message with enhanced ZED-F9R support and error handling."""
         try:
@@ -886,9 +850,28 @@ class GPSHandler:
             logger.debug(f"Error processing NMEA message: {e}")
             self.diagnostics.log_error("GPS NMEA data processing error")
     
-    async def get_latest_data(self) -> Dict[str, Any]:
-        """Get the latest GPS data."""
-        return self.latest_data.copy()
+    def get_latest_data(self) -> Optional[Dict[str, Any]]:
+        """Return the latest GPS data with comprehensive debugging."""
+        # =========================== DEBUG LOGGING START ===========================
+        if hasattr(self, 'latest_data'):
+            data_keys = list(self.latest_data.keys())
+            logger.info(f"🔍 DEBUG: get_latest_data() called - available keys: {data_keys}")
+            
+            if data_keys:
+                # Show sample of data for key fields
+                sample_data = {}
+                for key in ['timestamp', 'latitude', 'longitude', 'fix_type', 'satellites', 'satellites_used']:
+                    if key in self.latest_data:
+                        sample_data[key] = self.latest_data[key]
+                logger.info(f"🔍 DEBUG: Sample GPS data: {sample_data}")
+            else:
+                logger.warning(f"🔍 DEBUG: latest_data exists but is EMPTY!")
+                
+            return self.latest_data.copy() if self.latest_data else None
+        else:
+            logger.warning(f"🔍 DEBUG: latest_data attribute DOES NOT EXIST!")
+            return None
+        # =========================== DEBUG LOGGING END =============================
     
     def is_connected(self) -> bool:
         """Check if GPS device is connected."""
