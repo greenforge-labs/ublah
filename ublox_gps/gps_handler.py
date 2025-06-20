@@ -276,12 +276,20 @@ class GPSHandler:
 
     async def _enable_messages(self) -> None:
         """Enable required UBX messages based on device capabilities with error handling."""
+        # =========================== DEBUG LOGGING START ===========================
+        logger.info("🔍 DEBUG: Starting to enable UBX messages...")
+        # =========================== DEBUG LOGGING END =============================
+        
         # Base messages for all devices
         messages_to_enable = [
             ('NAV', 'NAV-PVT', 1),     # Position, velocity, time
             ('NAV', 'NAV-HPPOSLLH', 1), # High precision position
             ('NAV', 'NAV-STATUS', 1),   # Navigation status
         ]
+        
+        # =========================== DEBUG LOGGING START ===========================
+        logger.info(f"🔍 DEBUG: Will enable {len(messages_to_enable)} base messages")
+        # =========================== DEBUG LOGGING END =============================
         
         # ZED-F9R specific messages
         if self.config.device_type == "ZED-F9R":
@@ -298,9 +306,17 @@ class GPSHandler:
         
         for msg_class, msg_type, rate in messages_to_enable:
             try:
+                # =========================== DEBUG LOGGING START ===========================
+                logger.info(f"🔍 DEBUG: Enabling {msg_type} at rate {rate}Hz...")
+                # =========================== DEBUG LOGGING END =============================
+                
                 # Get message class and ID
                 msg_class_code = self._get_ubx_class_code(msg_class)
                 msg_id_code = self._get_ubx_msg_id(msg_type)
+                
+                # =========================== DEBUG LOGGING START ===========================
+                logger.info(f"🔍 DEBUG: {msg_type} -> Class: 0x{msg_class_code:02X}, ID: 0x{msg_id_code:02X}")
+                # =========================== DEBUG LOGGING END =============================
                 
                 cfg_msg = UBXMessage('CFG', 'CFG-MSG', SET,
                                    msgClass=msg_class_code,
@@ -309,14 +325,24 @@ class GPSHandler:
                 await self._send_ubx_message(cfg_msg)
                 logger.debug(f"Enabled {msg_type} at rate {rate}Hz")
                 
+                # =========================== DEBUG LOGGING START ===========================
+                logger.info(f"🔍 DEBUG: Successfully sent enable command for {msg_type}")
+                # =========================== DEBUG LOGGING END =============================
+                
             except GPSConfigurationError as e:
                 logger.warning(f"Failed to enable {msg_type}: {e}")
+                # =========================== DEBUG LOGGING START ===========================
+                logger.error(f"🔍 DEBUG: GPSConfigurationError enabling {msg_type}: {e}")
+                # =========================== DEBUG LOGGING END =============================
                 self.diagnostics.log_error(f"Failed to enable {msg_type}")
             
             except Exception as e:
                 logger.warning(f"Failed to enable {msg_type}: {e}")
+                # =========================== DEBUG LOGGING START ===========================
+                logger.error(f"🔍 DEBUG: Exception enabling {msg_type}: {e}")
+                # =========================== DEBUG LOGGING END =============================
                 self.diagnostics.log_error(f"Failed to enable {msg_type}")
-
+    
     def _get_ubx_class_code(self, msg_class: str) -> int:
         """Get UBX message class code."""
         class_codes = {
