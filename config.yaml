@@ -3,6 +3,7 @@ version: "0.3.12"  # Clean production version
 slug: ublox_gps_rtk
 description: "HomeAssistant add-in for u-blox ZED-F9P GPS with NTRIP RTK corrections"
 url: "https://github.com/greenforge-labs/ublah"
+icon: mdi:map-marker-radius
 arch:
   - aarch64
   - amd64
