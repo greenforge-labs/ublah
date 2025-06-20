@@ -69,12 +69,27 @@ class UbloxGPSService:
     
     async def _run_service_loop(self) -> None:
         """Main service loop."""
+        loop_count = 0
+        
         while self.running:
             try:
+                loop_count += 1
+                if loop_count % 10 == 0:  # Log every 10 loops
+                    logger.info(f"🔍 DEBUG: Service loop iteration #{loop_count}")
+                
                 # Get GPS data
                 gps_data = await self.gps_handler.get_latest_data()
                 
                 if gps_data:
+                    logger.info(f"🔍 DEBUG: Service loop got GPS data with keys: {list(gps_data.keys())}")
+                    logger.info(f"🔍 DEBUG: GPS data timestamp: {gps_data.get('timestamp', 'No timestamp')}")
+                else:
+                    if loop_count % 20 == 0:  # Log every 20 loops when no data
+                        logger.warning(f"🔍 DEBUG: Service loop got no GPS data (iteration #{loop_count})")
+                
+                if gps_data:
+                    logger.info(f"🔍 DEBUG: Calling ha_interface.update_entities() with GPS data")
+                    
                     # Update HomeAssistant entities
                     await self.ha_interface.update_entities(gps_data)
                 
@@ -90,12 +105,16 @@ class UbloxGPSService:
                     'ntrip_connected': self.ntrip_client.is_connected() if self.ntrip_client else False,
                     'last_fix_time': gps_data.get('timestamp') if gps_data else None
                 }
+                
+                logger.debug(f"🔍 DEBUG: Updating status: {status}")
+                
                 await self.ha_interface.update_status(status)
                 
                 # Sleep for update interval
                 await asyncio.sleep(1.0 / self.config.update_rate_hz)
                 
             except Exception as e:
+                logger.error(f"🔍 DEBUG: Error in service loop iteration #{loop_count}: {e}")
                 logger.error(f"Error in service loop: {e}")
                 await asyncio.sleep(1)  # Wait before retrying
     

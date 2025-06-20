@@ -133,6 +133,113 @@ class HomeAssistantInterface:
         except Exception as e:
             logger.error(f"Failed to initialize entity {entity_id}: {e}")
     
+    async def update_gps_data(self, gps_data: Dict[str, Any]) -> None:
+        """Update GPS data entities in HomeAssistant."""
+        if not self.entities_initialized or not self.session:
+            logger.warning(f"🔍 DEBUG: Cannot update GPS data - entities_initialized: {self.entities_initialized}, session: {self.session is not None}")
+            return
+        
+        logger.info(f"🔍 DEBUG: update_gps_data called with data keys: {list(gps_data.keys())}")
+        logger.info(f"🔍 DEBUG: GPS data values: {gps_data}")
+        
+        try:
+            # Update device tracker with location
+            if 'latitude' in gps_data and 'longitude' in gps_data:
+                logger.info(f"🔍 DEBUG: Updating device tracker with lat: {gps_data['latitude']}, lon: {gps_data['longitude']}")
+                
+                await self._update_entity_state(
+                    'device_tracker.ublox_gps',
+                    'home',  # or 'not_home' based on your logic
+                    self.entities['device_tracker.ublox_gps'],
+                    {
+                        'latitude': gps_data['latitude'],
+                        'longitude': gps_data['longitude'],
+                        'gps_accuracy': gps_data.get('horizontal_accuracy', 0),
+                        'battery': 100,  # GPS devices typically don't report battery
+                        'source_type': 'gps'
+                    }
+                )
+            
+            # Update fix type
+            if 'fix_type' in gps_data:
+                fix_type_names = {
+                    0: 'No Fix',
+                    1: '2D Fix', 
+                    2: '3D Fix',
+                    3: 'GNSS + DR',
+                    4: 'Time Only',
+                    5: 'Survey-in'
+                }
+                fix_type_str = fix_type_names.get(gps_data['fix_type'], f"Unknown ({gps_data['fix_type']})")
+                
+                logger.info(f"🔍 DEBUG: Updating fix type: {fix_type_str}")
+                
+                await self._update_entity_state(
+                    'sensor.ublox_gps_fix_type',
+                    fix_type_str,
+                    self.entities['sensor.ublox_gps_fix_type']
+                )
+            
+            # Update satellite count
+            if 'satellites' in gps_data:
+                logger.info(f"🔍 DEBUG: Updating satellites: {gps_data['satellites']}")
+                
+                await self._update_entity_state(
+                    'sensor.ublox_gps_satellites',
+                    gps_data['satellites'],
+                    self.entities['sensor.ublox_gps_satellites']
+                )
+            
+            # Update accuracy (convert from meters to centimeters)
+            if 'horizontal_accuracy' in gps_data:
+                accuracy_cm = round(gps_data['horizontal_accuracy'] * 100, 1)
+                
+                logger.info(f"🔍 DEBUG: Updating accuracy: {accuracy_cm} cm")
+                
+                await self._update_entity_state(
+                    'sensor.ublox_gps_accuracy',
+                    accuracy_cm,
+                    self.entities['sensor.ublox_gps_accuracy']
+                )
+            
+            # Update altitude
+            if 'altitude' in gps_data:
+                logger.info(f"🔍 DEBUG: Updating altitude: {gps_data['altitude']} m")
+                
+                await self._update_entity_state(
+                    'sensor.ublox_gps_altitude',
+                    round(gps_data['altitude'], 1),
+                    self.entities['sensor.ublox_gps_altitude']
+                )
+            
+            # Update speed
+            if 'speed' in gps_data:
+                logger.info(f"🔍 DEBUG: Updating speed: {gps_data['speed']} m/s")
+                
+                await self._update_entity_state(
+                    'sensor.ublox_gps_speed',
+                    round(gps_data['speed'], 2),
+                    self.entities['sensor.ublox_gps_speed']
+                )
+            
+            # Update heading
+            if 'heading' in gps_data:
+                logger.info(f"🔍 DEBUG: Updating heading: {gps_data['heading']}°")
+                
+                await self._update_entity_state(
+                    'sensor.ublox_gps_heading',
+                    round(gps_data['heading'], 1),
+                    self.entities['sensor.ublox_gps_heading']
+                )
+            
+            self.last_update_time = datetime.utcnow()
+            
+            logger.info(f"🔍 DEBUG: GPS data update completed successfully")
+            
+        except Exception as e:
+            logger.error(f"🔍 DEBUG: Failed to update GPS entities: {e}")
+            logger.error(f"Failed to update GPS entities: {e}")
+    
     async def update_entities(self, gps_data: Dict[str, Any]) -> None:
         """Update HomeAssistant entities with GPS data."""
         if not self.entities_initialized or not self.session:
