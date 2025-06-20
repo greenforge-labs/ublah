@@ -49,8 +49,17 @@ class GPSHandler:
             await self._connect_device()
             await self._configure_device()
             
-            # Start reading data in background
-            self.reader_task = asyncio.create_task(self._read_data_loop())
+            # Start reading data in background (only if not already started)
+            if not self.reader_task or self.reader_task.done():
+                # =========================== DEBUG LOGGING START ===========================
+                logger.info("🔍 DEBUG: Creating reader task in start() method")
+                # =========================== DEBUG LOGGING END =============================
+                self.reader_task = asyncio.create_task(self._read_data_loop())
+            else:
+                # =========================== DEBUG LOGGING START ===========================
+                logger.warning("🔍 DEBUG: Reader task already exists, skipping creation")
+                # =========================== DEBUG LOGGING END =============================
+                
             logger.info("GPS handler started successfully")
             
         except GPSConnectionError as e:
@@ -120,8 +129,9 @@ class GPSHandler:
                 # Configure device (only if we have a connection)
                 await self._configure_device()
                 
-                # Start background data reading
-                self.reader_task = asyncio.create_task(self._read_data_loop())
+                # =========================== DEBUG LOGGING START ===========================
+                logger.info("🔍 DEBUG: Device configuration completed, reader task will be created in start() method")
+                # =========================== DEBUG LOGGING END =============================
                 
                 logger.info("GPS handler started successfully")
                 
@@ -397,17 +407,39 @@ class GPSHandler:
                             
                             try:
                                 from pyubx2 import UBXReader
-                                reader = UBXReader(remaining_data)
+                                # =========================== DEBUG LOGGING START ===========================
+                                logger.debug(f"🔍 DEBUG: Creating UBXReader with BytesIO wrapper for {len(remaining_data)} bytes")
+                                # =========================== DEBUG LOGGING END =============================
                                 
-                                for (raw_data, message) in reader:
-                                    if message:
-                                        # =========================== DEBUG LOGGING START ===========================
-                                        ubx_message_count += 1
-                                        logger.info(f"🔍 DEBUG: Parsed UBX message #{ubx_message_count}: {message.identity}")
-                                        # =========================== DEBUG LOGGING END =============================
-                                        
-                                        await self._process_ubx_message(message)
-                                        
+                                from io import BytesIO
+                                reader = UBXReader(BytesIO(remaining_data))
+                                
+                                try:
+                                    while True:
+                                        try:
+                                            raw_data_msg, message = reader.read()
+                                            if message:
+                                                # =========================== DEBUG LOGGING START ===========================
+                                                ubx_message_count += 1
+                                                logger.info(f"🔍 DEBUG: Parsed UBX message #{ubx_message_count}: {message.identity}")
+                                                # =========================== DEBUG LOGGING END =============================
+                                                
+                                                await self._process_ubx_message(message)
+                                            else:
+                                                break
+                                        except StopIteration:
+                                            break
+                                        except Exception as msg_error:
+                                            # =========================== DEBUG LOGGING START ===========================
+                                            logger.debug(f"🔍 DEBUG: Individual message parse error: {msg_error}")
+                                            # =========================== DEBUG LOGGING END =============================
+                                            break
+                                except Exception as reader_error:
+                                    # =========================== DEBUG LOGGING START ===========================
+                                    logger.debug(f"🔍 DEBUG: UBX reader iteration error: {reader_error}")
+                                    # =========================== DEBUG LOGGING END =============================
+                                    pass
+                            
                             except Exception as ubx_error:
                                 # =========================== DEBUG LOGGING START ===========================
                                 parse_error_count += 1
