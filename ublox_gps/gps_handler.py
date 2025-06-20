@@ -285,6 +285,7 @@ class GPSHandler:
             ('NAV', 'NAV-PVT', 1),     # Position, velocity, time
             ('NAV', 'NAV-HPPOSLLH', 1), # High precision position
             ('NAV', 'NAV-STATUS', 1),   # Navigation status
+            ('NAV', 'NAV-SAT', 1),     # Satellite information
         ]
         
         # =========================== DEBUG LOGGING START ===========================
@@ -357,7 +358,8 @@ class GPSHandler:
         """Get UBX message ID code."""
         msg_ids = {
             'NAV-PVT': 0x07, 'NAV-HPPOSLLH': 0x14, 'NAV-STATUS': 0x03,
-            'NAV-COV': 0x36, 'HNR-PVT': 0x00, 'ESF-INS': 0x15
+            'NAV-COV': 0x36, 'HNR-PVT': 0x00, 'ESF-INS': 0x15,
+            'NAV-SAT': 0x35
         }
         return msg_ids.get(msg_type, 0x00)
     
@@ -550,6 +552,15 @@ class GPSHandler:
             elif message.identity == 'ESF-INS':
                 await self._process_esf_ins(message)
                 
+            elif message.identity == 'NAV-SAT':
+                await self._process_nav_sat(message)
+                
+            elif message.identity == 'ACK-ACK':
+                await self._process_ack_ack(message)
+                
+            elif message.identity == 'ACK-NACK':
+                await self._process_ack_nack(message)
+                
             else:
                 # =========================== DEBUG LOGGING START ===========================
                 logger.info(f"🔍 DEBUG: Unhandled UBX message type: {message.identity}")
@@ -603,7 +614,8 @@ class GPSHandler:
                 'longitude': longitude,
                 'altitude': altitude,
                 'fix_type': message.fixType,
-                'satellites': message.numSV,
+                'satellites': message.numSV,  # Total satellites (backwards compatibility)
+                'satellites_used': message.numSV,  # Satellites used in nav solution
                 'horizontal_accuracy': message.hAcc / 1000.0,  # Convert from mm to meters
                 'vertical_accuracy': message.vAcc / 1000.0,
                 'speed': message.gSpeed / 1000.0,  # Convert from mm/s to m/s
@@ -746,6 +758,84 @@ class GPSHandler:
         except Exception as e:
             logger.debug(f"Error processing NAV-COV message: {e}")
             self.diagnostics.log_error("GPS NAV-COV data processing error")
+
+    async def _process_nav_sat(self, message) -> None:
+        """Process NAV-SAT message for satellite information with error handling."""
+        try:
+            self.latest_data.update({
+                'sat_timestamp': datetime.utcnow(),
+                'sat_num_svs': message.numSvs,
+                'sat_global_svid': message.globalSvid,
+                'sat_reserved1': message.reserved1,
+                'sat_reserved2': message.reserved2,
+                'sat_svid': message.svid,
+                'sat_flags': message.flags,
+                'sat_quality': message.quality,
+                'sat_cno': message.cno,
+                'sat_elev': message.elev,
+                'sat_azim': message.azim,
+                'sat_prn': message.prn,
+            })
+            
+        except GPSDataValidationError as e:
+            logger.debug(f"Error processing NAV-SAT message: {e}")
+            self.diagnostics.log_error("GPS NAV-SAT data validation error")
+        
+        except Exception as e:
+            logger.debug(f"Error processing NAV-SAT message: {e}")
+            self.diagnostics.log_error("GPS NAV-SAT data processing error")
+
+    async def _process_ack_ack(self, message) -> None:
+        """Process ACK-ACK message for configuration success with error handling."""
+        try:
+            # Map message class/ID to readable names for better logging
+            msg_map = {
+                (0x01, 0x07): "NAV-PVT",
+                (0x01, 0x14): "NAV-HPPOSLLH", 
+                (0x01, 0x03): "NAV-STATUS",
+                (0x01, 0x35): "NAV-SAT",
+                (0x06, 0x01): "CFG-MSG",
+                (0x06, 0x00): "CFG-PRT",
+            }
+            
+            msg_name = msg_map.get((message.clsID, message.msgID), f"0x{message.clsID:02X}-0x{message.msgID:02X}")
+            
+            # =========================== DEBUG LOGGING START ===========================
+            logger.info(f"🔍 DEBUG: ✅ Configuration ACK for {msg_name}")
+            # =========================== DEBUG LOGGING END =============================
+            
+            # Count successful configuration acknowledgments
+            if not hasattr(self, 'ack_count'):
+                self.ack_count = 0
+            self.ack_count += 1
+            
+            self.diagnostics.record_operation("gps_handler", "config_ack", 1.0, True)
+            
+        except Exception as e:
+            logger.error(f"Error processing ACK-ACK message: {e}")
+            self.diagnostics.log_error("GPS ACK-ACK data processing error")
+
+    async def _process_ack_nack(self, message) -> None:
+        """Process ACK-NACK message for configuration failure with error handling."""
+        try:
+            # Map message class/ID to readable names for better logging
+            msg_map = {
+                (0x01, 0x07): "NAV-PVT",
+                (0x01, 0x14): "NAV-HPPOSLLH", 
+                (0x01, 0x03): "NAV-STATUS",
+                (0x01, 0x35): "NAV-SAT",
+                (0x06, 0x01): "CFG-MSG",
+                (0x06, 0x00): "CFG-PRT",
+            }
+            
+            msg_name = msg_map.get((message.clsID, message.msgID), f"0x{message.clsID:02X}-0x{message.msgID:02X}")
+            
+            logger.warning(f"❌ Configuration NACK for {msg_name} - command rejected!")
+            self.diagnostics.log_warning(f"ACK-NACK received for {msg_name}")
+            
+        except Exception as e:
+            logger.error(f"Error processing ACK-NACK message: {e}")
+            self.diagnostics.log_error("GPS ACK-NACK data processing error")
 
     def _get_fix_type_name(self, fix_type: int, carr_soln: int = 0) -> str:
         """Convert numeric fix type to readable name with RTK status."""

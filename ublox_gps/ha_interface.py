@@ -39,6 +39,35 @@ class HomeAssistantInterface:
                 'device_class': None,
                 'unit_of_measurement': 'satellites',
             },
+            'sensor.ublox_gps_satellites_used': {
+                'name': 'GPS Satellites Used',
+                'icon': 'mdi:satellite-uplink',
+                'device_class': None,
+                'unit_of_measurement': 'satellites',
+            },
+            'sensor.ublox_gps_satellites_in_view': {
+                'name': 'GPS Satellites in View',
+                'icon': 'mdi:satellite-variant',
+                'device_class': None,
+                'unit_of_measurement': 'satellites',
+            },
+            'sensor.ublox_gps_signal_strength': {
+                'name': 'GPS Signal Strength',
+                'icon': 'mdi:signal',
+                'device_class': 'signal_strength',
+                'unit_of_measurement': 'dBHz',
+            },
+            'sensor.ublox_gps_pdop': {
+                'name': 'GPS Position DOP',
+                'icon': 'mdi:target-variant',
+                'device_class': None,
+                'unit_of_measurement': None,
+            },
+            'binary_sensor.ublox_gps_signal_acquired': {
+                'name': 'GPS Signal Acquired',
+                'icon': 'mdi:satellite-uplink',
+                'device_class': 'connectivity',
+            },
             'sensor.ublox_gps_accuracy': {
                 'name': 'GPS Horizontal Accuracy',
                 'icon': 'mdi:target',
@@ -182,13 +211,64 @@ class HomeAssistantInterface:
             
             # Update satellite count
             if 'satellites' in gps_data:
-                logger.info(f"🔍 DEBUG: Updating satellites: {gps_data['satellites']}")
-                
                 await self._update_entity_state(
                     'sensor.ublox_gps_satellites',
                     gps_data['satellites'],
                     self.entities['sensor.ublox_gps_satellites']
                 )
+            
+            # Update satellites used (from NAV-PVT)
+            if 'satellites_used' in gps_data:
+                await self._update_entity_state(
+                    'sensor.ublox_gps_satellites_used',
+                    gps_data['satellites_used'],
+                    self.entities['sensor.ublox_gps_satellites_used']
+                )
+            
+            # Update satellites in view (from NAV-SAT)
+            if 'sat_num_svs' in gps_data:
+                await self._update_entity_state(
+                    'sensor.ublox_gps_satellites_in_view',
+                    gps_data['sat_num_svs'],
+                    self.entities['sensor.ublox_gps_satellites_in_view']
+                )
+            
+            # Update signal strength (average C/N0 from NAV-SAT)
+            if 'sat_cno' in gps_data and gps_data['sat_cno']:
+                try:
+                    # Calculate average signal strength if multiple satellites
+                    if isinstance(gps_data['sat_cno'], list):
+                        avg_signal = sum(gps_data['sat_cno']) / len(gps_data['sat_cno'])
+                    else:
+                        avg_signal = gps_data['sat_cno']
+                    
+                    await self._update_entity_state(
+                        'sensor.ublox_gps_signal_strength',
+                        round(avg_signal, 1),
+                        self.entities['sensor.ublox_gps_signal_strength']
+                    )
+                except (TypeError, ZeroDivisionError):
+                    pass
+            
+            # Update PDOP (position dilution of precision)
+            if 'pdop' in gps_data:
+                await self._update_entity_state(
+                    'sensor.ublox_gps_pdop',
+                    round(gps_data['pdop'], 2),
+                    self.entities['sensor.ublox_gps_pdop']
+                )
+            
+            # Update signal acquired status
+            signal_acquired = (
+                gps_data.get('fix_type', 'No Fix') != 'No Fix' or
+                gps_data.get('satellites_used', 0) > 0 or
+                gps_data.get('sat_num_svs', 0) > 4
+            )
+            await self._update_entity_state(
+                'binary_sensor.ublox_gps_signal_acquired',
+                'on' if signal_acquired else 'off',
+                self.entities['binary_sensor.ublox_gps_signal_acquired']
+            )
             
             # Update accuracy (convert from meters to centimeters)
             if 'horizontal_accuracy' in gps_data:
@@ -276,6 +356,59 @@ class HomeAssistantInterface:
                     gps_data['satellites'],
                     self.entities['sensor.ublox_gps_satellites']
                 )
+            
+            # Update satellites used (from NAV-PVT)
+            if 'satellites_used' in gps_data:
+                await self._update_entity_state(
+                    'sensor.ublox_gps_satellites_used',
+                    gps_data['satellites_used'],
+                    self.entities['sensor.ublox_gps_satellites_used']
+                )
+            
+            # Update satellites in view (from NAV-SAT)
+            if 'sat_num_svs' in gps_data:
+                await self._update_entity_state(
+                    'sensor.ublox_gps_satellites_in_view',
+                    gps_data['sat_num_svs'],
+                    self.entities['sensor.ublox_gps_satellites_in_view']
+                )
+            
+            # Update signal strength (average C/N0 from NAV-SAT)
+            if 'sat_cno' in gps_data and gps_data['sat_cno']:
+                try:
+                    # Calculate average signal strength if multiple satellites
+                    if isinstance(gps_data['sat_cno'], list):
+                        avg_signal = sum(gps_data['sat_cno']) / len(gps_data['sat_cno'])
+                    else:
+                        avg_signal = gps_data['sat_cno']
+                    
+                    await self._update_entity_state(
+                        'sensor.ublox_gps_signal_strength',
+                        round(avg_signal, 1),
+                        self.entities['sensor.ublox_gps_signal_strength']
+                    )
+                except (TypeError, ZeroDivisionError):
+                    pass
+            
+            # Update PDOP (position dilution of precision)
+            if 'pdop' in gps_data:
+                await self._update_entity_state(
+                    'sensor.ublox_gps_pdop',
+                    round(gps_data['pdop'], 2),
+                    self.entities['sensor.ublox_gps_pdop']
+                )
+            
+            # Update signal acquired status
+            signal_acquired = (
+                gps_data.get('fix_type', 'No Fix') != 'No Fix' or
+                gps_data.get('satellites_used', 0) > 0 or
+                gps_data.get('sat_num_svs', 0) > 4
+            )
+            await self._update_entity_state(
+                'binary_sensor.ublox_gps_signal_acquired',
+                'on' if signal_acquired else 'off',
+                self.entities['binary_sensor.ublox_gps_signal_acquired']
+            )
             
             # Update accuracy (convert to cm)
             if 'horizontal_accuracy' in gps_data:
