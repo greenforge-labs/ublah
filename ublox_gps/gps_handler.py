@@ -348,21 +348,68 @@ class GPSHandler:
         return dyn_models.get(self.config.dynamic_model_type, 2)  # Default: stationary
 
     async def _disable_nmea_output(self) -> None:
-        """Disable default NMEA message output to reduce data overhead with error handling."""
-        logger.info("Disabling NMEA output messages...")
+        """Disable NMEA output on USB interface using CFG-USBOUTPROT."""
+        logger.info("Disabling NMEA output on USB interface...")
         
+        try:
+            # Use CFG-USBOUTPROT to disable NMEA on USB
+            # Key ID 0x10780002 = CFG-USBOUTPROT-NMEA
+            # Value: 0 = disable NMEA output on USB
+            cfg_val = UBXMessage('CFG', 'CFG-VALSET', SET,
+                                version=0,
+                                layers=0b00000111,  # RAM + BBR + Flash
+                                transaction=0,
+                                reserved0=0,
+                                cfgData=[
+                                    # CFG-USBOUTPROT-NMEA: Disable NMEA on USB
+                                    (0x10780002, 0)  # Key ID, Value (0 = disable)
+                                ])
+            
+            await self._send_ubx_message(cfg_val)
+            logger.info("NMEA output disabled on USB interface")
+            
+            # Optionally, also disable NMEA on UART1 if needed
+            # This is useful if the device might also be connected via UART
+            if hasattr(self, '_disable_uart_nmea') and self._disable_uart_nmea:
+                cfg_uart = UBXMessage('CFG', 'CFG-VALSET', SET,
+                                    version=0,
+                                    layers=0b00000111,  # RAM + BBR + Flash
+                                    transaction=0,
+                                    reserved0=0,
+                                    cfgData=[
+                                        # CFG-UART1OUTPROT-NMEA: Disable NMEA on UART1
+                                        (0x10740002, 0)  # Key ID, Value (0 = disable)
+                                    ])
+                await self._send_ubx_message(cfg_uart)
+                logger.info("NMEA output also disabled on UART1 interface")
+                
+        except Exception as e:
+            logger.error(f"Failed to disable NMEA output via CFG-USBOUTPROT: {e}")
+            logger.info("Falling back to individual message disabling...")
+            
+            # Fallback to the old method if CFG-USBOUTPROT fails
+            await self._disable_nmea_output_legacy()
+    
+    async def _disable_nmea_output_legacy(self) -> None:
+        """Legacy method to disable NMEA messages individually."""
         nmea_messages = [
             ('NMEA', 'GGA'), ('NMEA', 'GLL'), ('NMEA', 'GSA'), 
-            ('NMEA', 'GSV'), ('NMEA', 'RMC'), ('NMEA', 'VTG')
+            ('NMEA', 'GSV'), ('NMEA', 'RMC'), ('NMEA', 'VTG'),
+            ('NMEA', 'ZDA'), ('NMEA', 'GBS'), ('NMEA', 'DTM'),
+            ('NMEA', 'GNS'), ('NMEA', 'GRS'), ('NMEA', 'GST')
         ]
         
+        # Disable on all ports (UART1, UART2, USB, SPI, I2C)
         for msg_class, msg_type in nmea_messages:
             try:
                 cfg_msg = UBXMessage('CFG', 'CFG-MSG', SET,
                                    msgClass=0xF0,  # NMEA class
                                    msgID=self._get_nmea_msg_id(msg_type),
                                    rateUART1=0,  # Disable on UART1
-                                   rateUSB=0)  # Disable on USB
+                                   rateUART2=0,  # Disable on UART2
+                                   rateUSB=0,    # Disable on USB
+                                   rateSPI=0,    # Disable on SPI
+                                   rateI2C=0)    # Disable on I2C
                 await self._send_ubx_message(cfg_msg)
             except GPSConfigurationError as e:
                 logger.debug(f"Failed to disable {msg_type}: {e}")
@@ -371,15 +418,17 @@ class GPSHandler:
             except Exception as e:
                 logger.debug(f"Failed to disable {msg_type}: {e}")
                 self.diagnostics.log_error(f"Failed to disable {msg_type}")
-
+    
     def _get_nmea_msg_id(self, msg_type: str) -> int:
         """Get NMEA message ID for configuration."""
         nmea_ids = {
             'GGA': 0x00, 'GLL': 0x01, 'GSA': 0x02,
-            'GSV': 0x03, 'RMC': 0x04, 'VTG': 0x05
+            'GSV': 0x03, 'RMC': 0x04, 'VTG': 0x05,
+            'ZDA': 0x08, 'GBS': 0x09, 'DTM': 0x0A,
+            'GNS': 0x0D, 'GRS': 0x06, 'GST': 0x07
         }
         return nmea_ids.get(msg_type, 0x00)
-
+    
     async def _enable_messages(self) -> None:
         """Enable required UBX messages based on device capabilities with error handling."""
         # =========================== DEBUG LOGGING START ===========================
@@ -595,6 +644,10 @@ class GPSHandler:
                     # Append new data to buffer
                     buffer.extend(data)
                     
+                    # Filter out malformed NMEA data before processing
+                    if self.config.disable_nmea_output:
+                        buffer = self._filter_malformed_nmea(buffer)
+                    
                     # Process UBX messages
                     if b'\xb5\x62' in buffer:
                         # =========================== DEBUG LOGGING START ===========================
@@ -706,45 +759,47 @@ class GPSHandler:
         logger.debug(f"   ACK messages: {self._ack_message_count}")
         # =========================== DEBUG LOGGING END ===========================
 
-    def _get_fix_type_string(self, fix_type, carrier_soln=0):
+    def _filter_malformed_nmea(self, buffer: bytearray) -> bytearray:
+        """Filter out malformed NMEA data from buffer.
+        
+        Removes NMEA-like data that starts with $ but has invalid characters.
+        Valid NMEA sentences should start with $ followed by uppercase letters.
         """
-        Convert numeric fix type and carrier solution status to descriptive string.
+        if not buffer or b'$' not in buffer:
+            return buffer
         
-        Args:
-            fix_type (int): UBX fixType value (0-5)
-            carrier_soln (int): Carrier phase solution status (0-3)
-                0: No carrier phase solution
-                1: Float solution (cm/dm level)
-                2: Fixed solution (mm level)
-                3: Reserved
-                
-        Returns:
-            str: Human-readable fix type description
-        """
-        fix_types = {
-            0: "No Fix",
-            1: "Dead Reckoning",
-            2: "2D Fix",
-            3: "3D Fix",
-            4: "GNSS + Dead Reckoning",
-            5: "Time Only"
-        }
+        filtered = bytearray()
+        i = 0
         
-        rtk_status = {
-            0: "",
-            1: "RTK Float",
-            2: "RTK Fixed",
-            3: "RTK Reserved"
-        }
+        while i < len(buffer):
+            if buffer[i:i+1] == b'$':
+                # Check if this looks like a valid NMEA sentence start
+                # Valid NMEA should be $GPGGA, $GNGLL, etc - so $ followed by letters
+                if i + 2 < len(buffer):
+                    next_chars = buffer[i+1:i+3]
+                    # Check if next characters are printable ASCII letters
+                    if all(65 <= c <= 90 or 97 <= c <= 122 for c in next_chars):
+                        # Looks like valid NMEA, keep it
+                        filtered.append(buffer[i])
+                    else:
+                        # Malformed NMEA, skip the $ and log it once
+                        if not hasattr(self, '_malformed_nmea_logged'):
+                            logger.debug(f"Filtering malformed NMEA data: ${next_chars.hex()}")
+                            self._malformed_nmea_logged = True
+                        # Skip this byte
+                        i += 1
+                        continue
+                else:
+                    # Not enough data to check, keep it
+                    filtered.append(buffer[i])
+            else:
+                # Not a $ character, keep it
+                filtered.append(buffer[i])
+            
+            i += 1
         
-        base_fix = fix_types.get(fix_type, f"Unknown ({fix_type})")
-        
-        # For 3D or GNSS+DR fixes, add RTK status if available
-        if fix_type in [3, 4] and carrier_soln > 0:
-            return f"{base_fix} + {rtk_status[carrier_soln]}"
-        
-        return base_fix
-        
+        return filtered
+    
     async def _process_ubx_message(self, message) -> None:
         """Process a UBX message based on its class and ID."""
         try:
@@ -867,13 +922,13 @@ class GPSHandler:
                     # Process NAV-STATUS message
                     # =========================== DEBUG LOGGING START ===========================
                     logger.debug(f" Received NAV-STATUS message, adding to debug log")
-                    # =========================== DEBUG LOGGING END ===========================
+                    # =========================== DEBUG LOGGING END =============================
                     pass
                 elif msg_id == "COV":
                     # Process NAV-COV message
                     # =========================== DEBUG LOGGING START ===========================
                     logger.debug(f" Received NAV-COV message, adding to debug log")
-                    # =========================== DEBUG LOGGING END ===========================
+                    # =========================== DEBUG LOGGING END =============================
                     pass
                 else:
                     # =========================== DEBUG LOGGING START ===========================
@@ -887,7 +942,7 @@ class GPSHandler:
                     # Process HNR-PVT message
                     # =========================== DEBUG LOGGING START ===========================
                     logger.debug(f" Received HNR-PVT message, adding to debug log")
-                    # =========================== DEBUG LOGGING END ===========================
+                    # =========================== DEBUG LOGGING END =============================
                     pass
                 else:
                     # =========================== DEBUG LOGGING START ===========================
@@ -1306,7 +1361,7 @@ class GPSHandler:
             logger.error(f"Error processing ACK-NACK message: {e}")
             self.diagnostics.log_error("GPS ACK-NACK data processing error")
 
-    def _get_fix_type_name(self, fix_type: int, carr_soln: int = 0) -> str:
+    def _get_fix_type_string(self, fix_type: int, carrier_soln: int = 0) -> str:
         """Convert numeric fix type to readable name with RTK status."""
         base_fix_types = {
             0: "No Fix",
@@ -1320,14 +1375,14 @@ class GPSHandler:
         base_name = base_fix_types.get(fix_type, f"Unknown ({fix_type})")
         
         if fix_type == 3:  # 3D Fix
-            if carr_soln == 1:
+            if carrier_soln == 1:
                 return "RTK Float"
-            elif carr_soln == 2:
+            elif carrier_soln == 2:
                 return "RTK Fixed"
         elif fix_type == 4:  # GNSS + Dead Reckoning
-            if carr_soln == 1:
+            if carrier_soln == 1:
                 return "RTK Float + DR"
-            elif carr_soln == 2:
+            elif carrier_soln == 2:
                 return "RTK Fixed + DR"
         
         return base_name
