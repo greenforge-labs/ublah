@@ -108,18 +108,18 @@ class GPSHandler:
         
         # =========================== DEBUG LOGGING START ===========================
         logger.info("🔍 DEBUG: Starting GPS device connection process")
-        logger.info(f"🔍 DEBUG: Attempting connection to: {device_path}")
-        logger.info(f"🔍 DEBUG: Baudrate: {baudrate}")
+        logger.debug(f" Attempting connection to: {device_path}")
+        logger.debug(f" Baudrate: {baudrate}")
         
         # Check if device path exists
         if self._device_exists(device_path):
-            logger.info(f"🔍 DEBUG: ✅ Device path exists: {device_path}")
+            logger.debug(f" ✅ Device path exists: {device_path}")
         else:
-            logger.error(f"🔍 DEBUG: ❌ Device path does NOT exist: {device_path}")
+            logger.error(f"❌ Device path does NOT exist: {device_path}")
         
         # List all available serial ports for comparison
         available_ports = self._list_available_ports()
-        logger.info(f"🔍 DEBUG: Available serial ports: {available_ports}")
+        logger.debug(f" Available serial ports: {available_ports}")
         
         # Check device permissions (Linux/Unix systems)
         try:
@@ -128,9 +128,9 @@ class GPSHandler:
             if os.path.exists(device_path):
                 file_stat = os.stat(device_path)
                 permissions = stat.filemode(file_stat.st_mode)
-                logger.info(f"🔍 DEBUG: Device permissions: {permissions}")
-                logger.info(f"🔍 DEBUG: Device owner UID: {file_stat.st_uid}")
-                logger.info(f"🔍 DEBUG: Current process UID: {os.getuid()}")
+                logger.debug(f" Device permissions: {permissions}")
+                logger.debug(f" Device owner UID: {file_stat.st_uid}")
+                logger.debug(f" Current process UID: {os.getuid()}")
         except Exception as perm_e:
             logger.warning(f"🔍 DEBUG: Could not check device permissions: {perm_e}")
         # =========================== DEBUG LOGGING END =============================
@@ -154,8 +154,8 @@ class GPSHandler:
             
             # =========================== DEBUG LOGGING START ===========================
             logger.info("🔍 DEBUG: ✅ serial_asyncio.open_serial_connection() completed successfully")
-            logger.info(f"🔍 DEBUG: Reader object: {type(self.reader)}")
-            logger.info(f"🔍 DEBUG: Writer object: {type(self.writer)}")
+            logger.debug(f" Reader object: {type(self.reader)}")
+            logger.debug(f" Writer object: {type(self.writer)}")
             # =========================== DEBUG LOGGING END =============================
             
             logger.info(f"✅ Serial port opened at {baudrate} baud")
@@ -395,7 +395,7 @@ class GPSHandler:
         ]
         
         # =========================== DEBUG LOGGING START ===========================
-        logger.info(f"🔍 DEBUG: Will enable {len(messages_to_enable)} base messages")
+        logger.debug(f" Will enable {len(messages_to_enable)} base messages")
         # =========================== DEBUG LOGGING END =============================
         
         # ZED-F9R specific messages
@@ -414,7 +414,7 @@ class GPSHandler:
         for msg_class, msg_type, rate in messages_to_enable:
             try:
                 # =========================== DEBUG LOGGING START ===========================
-                logger.info(f"🔍 DEBUG: Enabling {msg_type} at rate {rate}Hz...")
+                logger.debug(f" Enabling {msg_type} at rate {rate}Hz...")
                 # =========================== DEBUG LOGGING END =============================
                 
                 # Get message class and ID
@@ -422,7 +422,7 @@ class GPSHandler:
                 msg_id_code = self._get_ubx_msg_id(msg_type)
                 
                 # =========================== DEBUG LOGGING START ===========================
-                logger.info(f"🔍 DEBUG: {msg_type} -> Class: 0x{msg_class_code:02X}, ID: 0x{msg_id_code:02X}")
+                logger.debug(f" {msg_type} -> Class: 0x{msg_class_code:02X}, ID: 0x{msg_id_code:02X}")
                 # =========================== DEBUG LOGGING END =============================
                 
                 cfg_msg = UBXMessage('CFG', 'CFG-MSG', SET,
@@ -434,20 +434,20 @@ class GPSHandler:
                 logger.debug(f"Enabled {msg_type} at rate {rate}Hz")
                 
                 # =========================== DEBUG LOGGING START ===========================
-                logger.info(f"🔍 DEBUG: Successfully sent enable command for {msg_type}")
+                logger.debug(f" Successfully sent enable command for {msg_type}")
                 # =========================== DEBUG LOGGING END =============================
                 
             except GPSConfigurationError as e:
                 logger.warning(f"Failed to enable {msg_type}: {e}")
                 # =========================== DEBUG LOGGING START ===========================
-                logger.error(f"🔍 DEBUG: GPSConfigurationError enabling {msg_type}: {e}")
+                logger.error(f"GPSConfigurationError enabling {msg_type}: {e}")
                 # =========================== DEBUG LOGGING END =============================
                 self.diagnostics.log_error(f"Failed to enable {msg_type}")
             
             except Exception as e:
                 logger.warning(f"Failed to enable {msg_type}: {e}")
                 # =========================== DEBUG LOGGING START ===========================
-                logger.error(f"🔍 DEBUG: Exception enabling {msg_type}: {e}")
+                logger.error(f"Exception enabling {msg_type}: {e}")
                 # =========================== DEBUG LOGGING END =============================
                 self.diagnostics.log_error(f"Failed to enable {msg_type}")
         
@@ -455,12 +455,12 @@ class GPSHandler:
         logger.info(f"ESF-INS message processed")
         
         # =========================== DEBUG LOGGING START ===========================
-        logger.info(f"🔍 DEBUG: Device should now be outputting NAV messages at 1Hz")
-        logger.info(f"🔍 DEBUG: If no NAV messages appear in logs, check:")
-        logger.info(f"🔍 DEBUG:   1. Device may need clear sky view for satellite acquisition")
-        logger.info(f"🔍 DEBUG:   2. Indoor reception may be too weak for navigation solution")
-        logger.info(f"🔍 DEBUG:   3. Device may need CFG-CFG save command (not implemented)")
-        logger.info(f"🔍 DEBUG: Will poll device status if no NAV messages after 10 seconds...")
+        logger.debug(f" Device should now be outputting NAV messages at 1Hz")
+        logger.debug(f" If no NAV messages appear in logs, check:")
+        logger.debug(f"   1. Device may need clear sky view for satellite acquisition")
+        logger.debug(f"   2. Indoor reception may be too weak for navigation solution")
+        logger.debug(f"   3. Device may need CFG-CFG save command (not implemented)")
+        logger.debug(f" Will poll device status if no NAV messages after 10 seconds...")
         # =========================== DEBUG LOGGING END =============================
 
     def _get_ubx_class_code(self, msg_class: str) -> int:
@@ -504,8 +504,8 @@ class GPSHandler:
         """Send a UBX message to the GPS device."""
         try:
             # =========================== DEBUG LOGGING START ===========================
-            logger.info(f"🔍 DEBUG: Sending UBX message: {message.identity if hasattr(message, 'identity') else 'Unknown'}")
-            logger.info(f"🔍 DEBUG: Message bytes: {message.serialize().hex()}")
+            logger.debug(f" Sending UBX message: {message.identity if hasattr(message, 'identity') else 'Unknown'}")
+            logger.debug(f" Message bytes: {message.serialize().hex()}")
             # =========================== DEBUG LOGGING END =============================
             
             # Send the message
@@ -513,12 +513,12 @@ class GPSHandler:
             await self.writer.drain()
             
             # =========================== DEBUG LOGGING START ===========================
-            logger.info(f"🔍 DEBUG: UBX message sent successfully")
+            logger.debug(f" UBX message sent successfully")
             # =========================== DEBUG LOGGING END =============================
             return True
         except Exception as e:
             # =========================== DEBUG LOGGING START ===========================
-            logger.error(f"🔍 DEBUG: Error sending UBX message: {e}")
+            logger.error(f"Error sending UBX message: {e}")
             # =========================== DEBUG LOGGING END =============================
             logger.error(f"Error sending UBX message: {e}")
             return False
@@ -527,7 +527,7 @@ class GPSHandler:
         """Send a poll (GET) message to request data from the GPS device."""
         try:
             # =========================== DEBUG LOGGING START ===========================
-            logger.info(f"🔍 DEBUG: Sending poll request for {msg_class}-{msg_id}")
+            logger.debug(f" Sending poll request for {msg_class}-{msg_id}")
             # =========================== DEBUG LOGGING END =============================
             
             # Create a poll message using pyubx2
@@ -535,18 +535,18 @@ class GPSHandler:
             poll_msg = UBXMessage(msg_class, f"{msg_class}-{msg_id}", GET)
             
             # Log the message bytes for debugging
-            logger.info(f"🔍 DEBUG: Poll message bytes: {poll_msg.serialize().hex()}")
+            logger.debug(f" Poll message bytes: {poll_msg.serialize().hex()}")
             
             # Send the message
             await self._send_ubx_message(poll_msg)
             
             # =========================== DEBUG LOGGING START ===========================
-            logger.info(f"🔍 DEBUG: Poll request sent successfully")
+            logger.debug(f" Poll request sent successfully")
             # =========================== DEBUG LOGGING END =============================
             
         except Exception as e:
             # =========================== DEBUG LOGGING START ===========================
-            logger.error(f"🔍 DEBUG: Error sending poll request: {e}")
+            logger.error(f"Error sending poll request: {e}")
             # =========================== DEBUG LOGGING END =============================
             logger.error(f"Error sending {msg_class}-{msg_id} poll request: {e}")
 
@@ -554,8 +554,8 @@ class GPSHandler:
         """Read data from the GPS device and process it with improved handling of partial messages."""
         # =========================== DEBUG LOGGING START ===========================
         logger.info("🔍 DEBUG: GPS data reading loop started")
-        logger.info(f"🔍 DEBUG: Reader object type: {type(self.reader)}")
-        logger.info(f"🔍 DEBUG: Writer object type: {type(self.writer)}")
+        logger.debug(f" Reader object type: {type(self.reader)}")
+        logger.debug(f" Writer object type: {type(self.writer)}")
         # =========================== DEBUG LOGGING END ===========================
         
         # Initialize counters and state variables
@@ -572,12 +572,12 @@ class GPSHandler:
                 try:
                     data = await asyncio.wait_for(self.reader.read(1024), timeout=1.0)
                     # =========================== DEBUG LOGGING START ===========================
-                    logger.info(f"🔍 DEBUG: Attempted to read data, received {len(data) if data else 0} bytes")
+                    logger.debug(f" Attempted to read data, received {len(data) if data else 0} bytes")
                     if data and len(data) > 0:
-                        logger.info(f"🔍 DEBUG: First few bytes: {data[:min(10, len(data))].hex()}")
+                        logger.debug(f" First few bytes: {data[:min(10, len(data))].hex()}")
                     # =========================== DEBUG LOGGING END ===========================
                 except Exception as read_error:
-                    logger.error(f"🔍 DEBUG: Error reading from device: {read_error}")
+                    logger.error(f"Error reading from device: {read_error}")
                     data = None
                 
                 if data:
@@ -589,7 +589,7 @@ class GPSHandler:
                     data_timeout_poll_sent = False
                     
                     # =========================== DEBUG LOGGING START ===========================
-                    logger.info(f"🔍 DEBUG: Read {len(data)} bytes")
+                    logger.debug(f" Read {len(data)} bytes")
                     # =========================== DEBUG LOGGING END =============================
                     
                     # Append new data to buffer
@@ -598,7 +598,7 @@ class GPSHandler:
                     # Process UBX messages
                     if b'\xb5\x62' in buffer:
                         # =========================== DEBUG LOGGING START ===========================
-                        logger.info(f"🔍 DEBUG: Found UBX sync bytes in buffer (size: {len(buffer)})")
+                        logger.debug(f" Found UBX sync bytes in buffer (size: {len(buffer)})")
                         # =========================== DEBUG LOGGING END =============================
                         
                         try:
@@ -618,7 +618,7 @@ class GPSHandler:
                                         parsed_messages += 1
                                         
                                         # =========================== DEBUG LOGGING START ===========================
-                                        logger.info(f"🔍 DEBUG: Parsed UBX message: {message.identity}")
+                                        logger.debug(f" Parsed UBX message: {message.identity}")
                                         # =========================== DEBUG LOGGING END =============================
                                         
                                         # Track message counts
@@ -672,7 +672,7 @@ class GPSHandler:
                         # =========================== DEBUG LOGGING START ===========================
                         nmea_start = buffer.find(b'$')
                         nmea_sample = buffer[nmea_start:nmea_start+min(20, len(buffer)-nmea_start)].decode('ascii', errors='replace')
-                        logger.info(f"🔍 DEBUG: Found NMEA data in buffer, sample: {nmea_sample}...")
+                        logger.debug(f" Found NMEA data in buffer, sample: {nmea_sample}...")
                         # =========================== DEBUG LOGGING END ===========================
                         await self._process_nmea_data(buffer)
                 
@@ -701,9 +701,9 @@ class GPSHandler:
                 await asyncio.sleep(1)  # Prevent tight loop on persistent errors
         
         # =========================== DEBUG LOGGING START ===========================
-        logger.info(f"🔍 DEBUG: GPS data loop ending. Stats:")
-        logger.info(f"🔍 DEBUG:   NAV messages: {self._nav_message_count}")
-        logger.info(f"🔍 DEBUG:   ACK messages: {self._ack_message_count}")
+        logger.debug(f" GPS data loop ending. Stats:")
+        logger.debug(f"   NAV messages: {self._nav_message_count}")
+        logger.debug(f"   ACK messages: {self._ack_message_count}")
         # =========================== DEBUG LOGGING END ===========================
 
     def _get_fix_type_string(self, fix_type, carrier_soln=0):
@@ -766,7 +766,7 @@ class GPSHandler:
                 return
             
             # =========================== DEBUG LOGGING START ===========================
-            logger.info(f"🔍 DEBUG: Processing UBX message: {msg_class}-{msg_id}")
+            logger.debug(f" Processing UBX message: {msg_class}-{msg_id}")
             # =========================== DEBUG LOGGING END =============================
             
             # Handle NAV class messages
@@ -781,7 +781,7 @@ class GPSHandler:
                     await self._process_nav_sat(message)
                 else:
                     # =========================== DEBUG LOGGING START ===========================
-                    logger.info(f"🔍 DEBUG: Unhandled NAV message: {msg_id}")
+                    logger.debug(f" Unhandled NAV message: {msg_id}")
                     # =========================== DEBUG LOGGING END =============================
                     pass
             
@@ -789,14 +789,14 @@ class GPSHandler:
             elif msg_class == "HNR":
                 if msg_id == "PVT":
                     # =========================== DEBUG LOGGING START ===========================
-                    logger.info(f"🔍 DEBUG: Received HNR-PVT message, adding to debug log")
-                    logger.info(f"🔍 DEBUG: HNR-PVT attributes: {dir(message)}")
+                    logger.debug(f" Received HNR-PVT message, adding to debug log")
+                    logger.debug(f" HNR-PVT attributes: {dir(message)}")
                     # =========================== DEBUG LOGGING END =============================
                     # Just log for now, implement processing later if needed
                     pass
                 else:
                     # =========================== DEBUG LOGGING START ===========================
-                    logger.info(f"🔍 DEBUG: Unhandled HNR message: {msg_id}")
+                    logger.debug(f" Unhandled HNR message: {msg_id}")
                     # =========================== DEBUG LOGGING END =============================
                     pass
             
@@ -804,14 +804,14 @@ class GPSHandler:
             elif msg_class == "ESF":
                 if msg_id == "INS":
                     # =========================== DEBUG LOGGING START ===========================
-                    logger.info(f"🔍 DEBUG: Received ESF-INS message, adding to debug log")
-                    logger.info(f"🔍 DEBUG: ESF-INS attributes: {dir(message)}")
+                    logger.debug(f" Received ESF-INS message, adding to debug log")
+                    logger.debug(f" ESF-INS attributes: {dir(message)}")
                     # =========================== DEBUG LOGGING END =============================
                     # Just log for now, implement processing later if needed
                     pass
                 else:
                     # =========================== DEBUG LOGGING START ===========================
-                    logger.info(f"🔍 DEBUG: Unhandled ESF message: {msg_id}")
+                    logger.debug(f" Unhandled ESF message: {msg_id}")
                     # =========================== DEBUG LOGGING END =============================
                     pass
                 
@@ -823,13 +823,13 @@ class GPSHandler:
                     await self._process_ack_nack(message)
                 else:
                     # =========================== DEBUG LOGGING START ===========================
-                    logger.info(f"🔍 DEBUG: Unhandled ACK message: {msg_id}")
+                    logger.debug(f" Unhandled ACK message: {msg_id}")
                     # =========================== DEBUG LOGGING END =============================
                     pass
                 
             else:
                 # =========================== DEBUG LOGGING START ===========================
-                logger.info(f"🔍 DEBUG: Unhandled UBX message class: {msg_class}-{msg_id}")
+                logger.debug(f" Unhandled UBX message class: {msg_class}-{msg_id}")
                 # =========================== DEBUG LOGGING END =============================
                 logger.debug(f"❓ Unhandled UBX message type: {msg_class}-{msg_id}")
             
@@ -851,10 +851,10 @@ class GPSHandler:
             msg_class, msg_id = message.identity.split('-', 1)
             
             # =========================== DEBUG LOGGING START ===========================
-            logger.info(f"🔍 DEBUG: Processing UBX message: {message.identity}")
-            logger.info(f"🔍 DEBUG: Message type: {type(message)}")
-            logger.info(f"🔍 DEBUG: Message attributes: {dir(message)}")
-            logger.info(f"🔍 DEBUG: Current latest_data keys: {list(self.latest_data.keys())}")
+            logger.debug(f" Processing UBX message: {message.identity}")
+            logger.debug(f" Message type: {type(message)}")
+            # logger.debug(f" Message attributes: {dir(message)}")
+            logger.debug(f" Current latest_data keys: {list(self.latest_data.keys())}")
             # =========================== DEBUG LOGGING END ===========================
             
             # Handle Navigation messages
@@ -866,18 +866,18 @@ class GPSHandler:
                 elif msg_id == "STATUS":
                     # Process NAV-STATUS message
                     # =========================== DEBUG LOGGING START ===========================
-                    logger.info(f"🔍 DEBUG: Received NAV-STATUS message, adding to debug log")
+                    logger.debug(f" Received NAV-STATUS message, adding to debug log")
                     # =========================== DEBUG LOGGING END ===========================
                     pass
                 elif msg_id == "COV":
                     # Process NAV-COV message
                     # =========================== DEBUG LOGGING START ===========================
-                    logger.info(f"🔍 DEBUG: Received NAV-COV message, adding to debug log")
+                    logger.debug(f" Received NAV-COV message, adding to debug log")
                     # =========================== DEBUG LOGGING END ===========================
                     pass
                 else:
                     # =========================== DEBUG LOGGING START ===========================
-                    logger.info(f"🔍 DEBUG: Unhandled NAV message: {msg_id}")
+                    logger.debug(f" Unhandled NAV message: {msg_id}")
                     # =========================== DEBUG LOGGING END ===========================
                     pass
             
@@ -886,12 +886,12 @@ class GPSHandler:
                 if msg_id == "PVT":
                     # Process HNR-PVT message
                     # =========================== DEBUG LOGGING START ===========================
-                    logger.info(f"🔍 DEBUG: Received HNR-PVT message, adding to debug log")
+                    logger.debug(f" Received HNR-PVT message, adding to debug log")
                     # =========================== DEBUG LOGGING END ===========================
                     pass
                 else:
                     # =========================== DEBUG LOGGING START ===========================
-                    logger.info(f"🔍 DEBUG: Unhandled HNR message: {msg_id}")
+                    logger.debug(f" Unhandled HNR message: {msg_id}")
                     # =========================== DEBUG LOGGING END ===========================
                     pass
             
@@ -899,14 +899,14 @@ class GPSHandler:
             elif msg_class == "ESF":
                 if msg_id == "INS":
                     # =========================== DEBUG LOGGING START ===========================
-                    logger.info(f"🔍 DEBUG: Received ESF-INS message, adding to debug log")
-                    logger.info(f"🔍 DEBUG: ESF-INS attributes: {dir(message)}")
+                    logger.debug(f" Received ESF-INS message, adding to debug log")
+                    logger.debug(f" ESF-INS attributes: {dir(message)}")
                     # =========================== DEBUG LOGGING END ===========================
                     # Just log for now, implement processing later if needed
                     pass
                 else:
                     # =========================== DEBUG LOGGING START ===========================
-                    logger.info(f"🔍 DEBUG: Unhandled ESF message: {msg_id}")
+                    logger.debug(f" Unhandled ESF message: {msg_id}")
                     # =========================== DEBUG LOGGING END ===========================
                     pass
                 
@@ -918,7 +918,7 @@ class GPSHandler:
                     await self._process_ack_nack(message)
                 else:
                     # =========================== DEBUG LOGGING START ===========================
-                    logger.info(f"🔍 DEBUG: Unhandled ACK message: {msg_id}")
+                    logger.debug(f" Unhandled ACK message: {msg_id}")
                     # =========================== DEBUG LOGGING END ===========================
                     pass
                 
@@ -927,21 +927,21 @@ class GPSHandler:
                 if msg_id == "VER":
                     # Process MON-VER message
                     # =========================== DEBUG LOGGING START ===========================
-                    logger.info(f"🔍 DEBUG: Received MON-VER message, adding to debug log")
-                    logger.info(f"🔍 DEBUG: MON-VER attributes: {dir(message)}")
+                    logger.debug(f" Received MON-VER message, adding to debug log")
+                    logger.debug(f" MON-VER attributes: {dir(message)}")
                     if hasattr(message, 'swVersion'):
-                        logger.info(f"🔍 DEBUG: GPS firmware version: {message.swVersion}")
+                        logger.debug(f" GPS firmware version: {message.swVersion}")
                     # =========================== DEBUG LOGGING END ===========================
                     pass
                 else:
                     # =========================== DEBUG LOGGING START ===========================
-                    logger.info(f"🔍 DEBUG: Unhandled MON message: {msg_id}")
+                    logger.debug(f" Unhandled MON message: {msg_id}")
                     # =========================== DEBUG LOGGING END ===========================
                     pass
                 
             else:
                 # =========================== DEBUG LOGGING START ===========================
-                logger.info(f"🔍 DEBUG: Unhandled UBX message class: {msg_class}-{msg_id}")
+                logger.debug(f" Unhandled UBX message class: {msg_class}-{msg_id}")
                 # =========================== DEBUG LOGGING END ===========================
                 logger.debug(f"❓ Unhandled UBX message type: {msg_class}-{msg_id}")
             
@@ -950,9 +950,9 @@ class GPSHandler:
             
         except Exception as e:
             # =========================== DEBUG LOGGING START ===========================
-            logger.error(f"🔍 DEBUG: Error processing UBX message: {e}")
-            logger.error(f"🔍 DEBUG: Exception type: {type(e).__name__}")
-            logger.error(f"🔍 DEBUG: Exception traceback", exc_info=True)
+            logger.error(f"Error processing UBX message: {e}")
+            logger.error(f"Exception type: {type(e).__name__}")
+            logger.error(f"Exception traceback", exc_info=True)
             # =========================== DEBUG LOGGING END ===========================
             logger.error(f"Error processing UBX message {message.identity if hasattr(message, 'identity') else 'Unknown'}: {e}")
             self.diagnostics.record_operation("gps_handler", "process_ubx", 0.0, False, str(e))
@@ -961,8 +961,8 @@ class GPSHandler:
         """Process NAV-PVT message for standard position data with error handling."""
         try:
             # =========================== DEBUG LOGGING START ===========================
-            logger.info(f"🔍 DEBUG: Processing NAV-PVT message")
-            logger.info(f"🔍 DEBUG: Message attributes: {dir(message)}")
+            logger.debug(f" Processing NAV-PVT message")
+            logger.debug(f" Message attributes: {dir(message)}")
             # =========================== DEBUG LOGGING END =============================
             
             # Check for essential fields needed for basic position
@@ -981,13 +981,13 @@ class GPSHandler:
             altitude = message.height / 1000.0  # Convert from mm to meters
             
             # =========================== DEBUG LOGGING START ===========================
-            logger.info(f"🔍 DEBUG: NAV-PVT extracted data:")
-            logger.info(f"🔍 DEBUG:   Latitude: {latitude}")
-            logger.info(f"🔍 DEBUG:   Longitude: {longitude}")
-            logger.info(f"🔍 DEBUG:   Altitude: {altitude}")
-            logger.info(f"🔍 DEBUG:   Fix Type: {message.fixType}")
-            logger.info(f"🔍 DEBUG:   Satellites: {message.numSV}")
-            logger.info(f"🔍 DEBUG:   H Accuracy: {message.hAcc / 1000.0}")
+            logger.debug(f" NAV-PVT extracted data:")
+            logger.debug(f"   Latitude: {latitude}")
+            logger.debug(f"   Longitude: {longitude}")
+            logger.debug(f"   Altitude: {altitude}")
+            logger.debug(f"   Fix Type: {message.fixType}")
+            logger.debug(f"   Satellites: {message.numSV}")
+            logger.debug(f"   H Accuracy: {message.hAcc / 1000.0}")
             # =========================== DEBUG LOGGING END =============================
             
             # Build data dictionary with all available fields
@@ -1026,15 +1026,15 @@ class GPSHandler:
             self.latest_data.update(data_update)
             
             # =========================== DEBUG LOGGING START ===========================
-            logger.info(f"🔍 DEBUG: Updated latest_data with NAV-PVT. Keys: {list(self.latest_data.keys())}")
+            logger.debug(f" Updated latest_data with NAV-PVT. Keys: {list(self.latest_data.keys())}")
             # =========================== DEBUG LOGGING END =============================
             
             self.diagnostics.record_operation("gps_handler", "nav_pvt", 1.0, True)
             
         except Exception as e:
             # =========================== DEBUG LOGGING START ===========================
-            logger.error(f"🔍 DEBUG: NAV-PVT Exception: {type(e).__name__}: {e}")
-            logger.error(f"🔍 DEBUG: NAV-PVT traceback", exc_info=True)
+            logger.error(f"NAV-PVT Exception: {type(e).__name__}: {e}")
+            logger.error(f"NAV-PVT traceback", exc_info=True)
             # =========================== DEBUG LOGGING END =============================
             logger.error(f"❌ Error processing NAV-PVT: {e}")
             self.diagnostics.record_operation("gps_handler", "nav_pvt", 0.0, False, str(e))
@@ -1092,14 +1092,19 @@ class GPSHandler:
         """Process NAV-HPPOSLLH message for high precision position data with error handling."""
         try:
             # =========================== DEBUG LOGGING START ===========================
-            logger.info(f"🔍 DEBUG: Processing NAV-HPPOSLLH - checking fields...")
-            logger.info(f"🔍 DEBUG: Message attributes: {dir(message)}")
+            logger.debug(f"Processing NAV-HPPOSLLH - checking fields...")
+            logger.debug(f"Message attributes: {dir(message)}")
             # =========================== DEBUG LOGGING END =============================
             
-            hp_lat = (message.lat + message.latHp * 1e-2) / 1e7
-            hp_lon = (message.lon + message.lonHp * 1e-2) / 1e7
-            hp_height = (message.height + message.heightHp * 1e-1) / 1000.0
-            hp_hmsl = (message.hMSL + message.hMSLHp * 1e-1) / 1000.0
+            lat_hp = getattr(message, 'latHp', 0)
+            lon_hp = getattr(message, 'lonHp', 0)
+            height_hp = getattr(message, 'heightHp', 0)
+            hmsl_hp = getattr(message, 'hMSLHp', 0)
+
+            hp_lat = (message.lat + lat_hp * 1e-2) / 1e7
+            hp_lon = (message.lon + lon_hp * 1e-2) / 1e7
+            hp_height = (message.height + height_hp * 1e-1) / 1000.0
+            hp_hmsl = (message.hMSL + hmsl_hp * 1e-1) / 1000.0
             
             self.latest_data.update({
                 'hp_timestamp': datetime.utcnow(),
@@ -1114,7 +1119,7 @@ class GPSHandler:
             })
             
             # =========================== DEBUG LOGGING START ===========================
-            logger.info(f"🔍 DEBUG: NAV-HPPOSLLH processed successfully")
+            logger.debug(f" NAV-HPPOSLLH processed successfully")
             # =========================== DEBUG LOGGING END =============================
             
         except GPSDataValidationError as e:
@@ -1123,8 +1128,8 @@ class GPSHandler:
         
         except Exception as e:
             # =========================== DEBUG LOGGING START ===========================
-            logger.error(f"🔍 DEBUG: NAV-HPPOSLLH Exception: {type(e).__name__}: {e}")
-            logger.error(f"🔍 DEBUG: NAV-HPPOSLLH traceback", exc_info=True)
+            logger.error(f"NAV-HPPOSLLH Exception: {type(e).__name__}: {e}")
+            logger.error(f"NAV-HPPOSLLH traceback", exc_info=True)
             # =========================== DEBUG LOGGING END =============================
             logger.debug(f"Error processing NAV-HPPOSLLH message: {e}")
             self.diagnostics.log_error("GPS NAV-HPPOSLLH data processing error")
@@ -1137,7 +1142,7 @@ class GPSHandler:
         """
         try:
             # =========================== DEBUG LOGGING START ===========================
-            logger.info(f"🔍 DEBUG: Processing NMEA data from buffer")
+            logger.debug(f" Processing NMEA data from buffer")
             # =========================== DEBUG LOGGING END ===========================
             
             # Convert bytes to string if needed
@@ -1156,18 +1161,18 @@ class GPSHandler:
             
             if not sentences:
                 # =========================== DEBUG LOGGING START ===========================
-                logger.info(f"🔍 DEBUG: No complete NMEA sentences found in buffer")
+                logger.debug(f" No complete NMEA sentences found in buffer")
                 # =========================== DEBUG LOGGING END ===========================
                 return
             
             # =========================== DEBUG LOGGING START ===========================
-            logger.info(f"🔍 DEBUG: Found {len(sentences)} potential NMEA sentences")
+            logger.debug(f" Found {len(sentences)} potential NMEA sentences")
             # =========================== DEBUG LOGGING END ===========================
             
             for sentence in sentences:
                 try:
                     # =========================== DEBUG LOGGING START ===========================
-                    logger.info(f"🔍 DEBUG: Processing NMEA sentence: {sentence[:20]}...")
+                    logger.debug(f" Processing NMEA sentence: {sentence[:20]}...")
                     # =========================== DEBUG LOGGING END ===========================
                     
                     # Clean up the sentence
@@ -1179,8 +1184,8 @@ class GPSHandler:
                     msg = pynmea2.parse(sentence)
                     
                     # =========================== DEBUG LOGGING START ===========================
-                    logger.info(f"🔍 DEBUG: Parsed NMEA sentence: {msg.sentence_type}")
-                    logger.info(f"🔍 DEBUG: NMEA data: {msg}")
+                    logger.debug(f" Parsed NMEA sentence: {msg.sentence_type}")
+                    logger.debug(f" NMEA data: {msg}")
                     # =========================== DEBUG LOGGING END ===========================
                     
                     # Process different NMEA sentence types
@@ -1196,7 +1201,7 @@ class GPSHandler:
                                 'nmea_hdop': float(msg.horizontal_dil) if msg.horizontal_dil else None
                             })
                             # =========================== DEBUG LOGGING START ===========================
-                            logger.info(f"🔍 DEBUG: Updated latest_data with GGA information")
+                            logger.debug(f" Updated latest_data with GGA information")
                             # =========================== DEBUG LOGGING END ===========================
                     
                     elif msg.sentence_type == 'RMC':  # Recommended Minimum Navigation Information
@@ -1210,7 +1215,7 @@ class GPSHandler:
                                 'nmea_status': msg.status
                             })
                             # =========================== DEBUG LOGGING START ===========================
-                            logger.info(f"🔍 DEBUG: Updated latest_data with RMC information")
+                            logger.debug(f" Updated latest_data with RMC information")
                             # =========================== DEBUG LOGGING END ===========================
                     
                     elif msg.sentence_type == 'GSA':  # GPS DOP and active satellites
@@ -1223,13 +1228,13 @@ class GPSHandler:
                             'nmea_vdop': float(msg.vdop) if msg.vdop else None
                         })
                         # =========================== DEBUG LOGGING START ===========================
-                        logger.info(f"🔍 DEBUG: Updated latest_data with GSA information")
+                        logger.debug(f" Updated latest_data with GSA information")
                         # =========================== DEBUG LOGGING END ===========================
                     
                     elif msg.sentence_type == 'GSV':  # Satellites in view
                         # Just log GSV messages for now
                         # =========================== DEBUG LOGGING START ===========================
-                        logger.info(f"🔍 DEBUG: Received GSV message: {msg.num_sv_in_view} satellites in view")
+                        logger.debug(f" Received GSV message: {msg.num_sv_in_view} satellites in view")
                         # =========================== DEBUG LOGGING END ===========================
                     
                 except Exception as nmea_error:
@@ -1241,7 +1246,7 @@ class GPSHandler:
             
         except Exception as e:
             # =========================== DEBUG LOGGING START ===========================
-            logger.error(f"🔍 DEBUG: NMEA processing error: {e}")
+            logger.error(f"NMEA processing error: {e}")
             # =========================== DEBUG LOGGING END ===========================
             logger.error(f"Error processing NMEA data: {e}")
             self.diagnostics.record_operation("gps_handler", "nmea_processing", 0.0, False, str(e))
@@ -1250,8 +1255,8 @@ class GPSHandler:
         """Process NAV-STATUS message for navigation status information with error handling."""
         try:
             # =========================== DEBUG LOGGING START ===========================
-            logger.info(f"🔍 DEBUG: Processing NAV-STATUS - checking fields...")
-            logger.info(f"🔍 DEBUG: Message attributes: {dir(message)}")
+            logger.debug(f" Processing NAV-STATUS - checking fields...")
+            logger.debug(f" Message attributes: {dir(message)}")
             # =========================== DEBUG LOGGING END =============================
             
             self.latest_data.update({
@@ -1265,7 +1270,7 @@ class GPSHandler:
             })
             
             # =========================== DEBUG LOGGING START ===========================
-            logger.info(f"🔍 DEBUG: NAV-STATUS processed successfully")
+            logger.debug(f" NAV-STATUS processed successfully")
             # =========================== DEBUG LOGGING END =============================
             
         except GPSDataValidationError as e:
@@ -1274,8 +1279,8 @@ class GPSHandler:
         
         except Exception as e:
             # =========================== DEBUG LOGGING START ===========================
-            logger.error(f"🔍 DEBUG: NAV-STATUS Exception: {type(e).__name__}: {e}")
-            logger.error(f"🔍 DEBUG: NAV-STATUS traceback", exc_info=True)
+            logger.error(f"NAV-STATUS Exception: {type(e).__name__}: {e}")
+            logger.error(f"NAV-STATUS traceback", exc_info=True)
             # =========================== DEBUG LOGGING END =============================
             logger.debug(f"Error processing NAV-STATUS message: {e}")
             self.diagnostics.log_error("GPS NAV-STATUS data processing error")
@@ -1305,9 +1310,9 @@ class GPSHandler:
         """Process NAV-SAT message for satellite information with error handling."""
         try:
             # =========================== DEBUG LOGGING START ===========================
-            logger.info(f"🔍 DEBUG: Processing NAV-SAT - checking fields...")
-            logger.info(f"🔍 DEBUG: Message attributes: {dir(message)}")
-            logger.info(f"🔍 DEBUG: numSvs: {getattr(message, 'numSvs', 'NOT FOUND')}")
+            logger.debug(f" Processing NAV-SAT - checking fields...")
+            logger.debug(f" Message attributes: {dir(message)}")
+            logger.debug(f" numSvs: {getattr(message, 'numSvs', 'NOT FOUND')}")
             # =========================== DEBUG LOGGING END =============================
             
             # NAV-SAT contains repeated groups, extract satellite info
@@ -1340,7 +1345,7 @@ class GPSHandler:
                 self.latest_data['signal_strength'] = avg_cno
             
             # =========================== DEBUG LOGGING START ===========================
-            logger.info(f"🔍 DEBUG: NAV-SAT processed successfully with {num_svs} satellites")
+            logger.debug(f" NAV-SAT processed successfully with {num_svs} satellites")
             # =========================== DEBUG LOGGING END =============================
             
         except GPSDataValidationError as e:
@@ -1349,8 +1354,8 @@ class GPSHandler:
         
         except Exception as e:
             # =========================== DEBUG LOGGING START ===========================
-            logger.error(f"🔍 DEBUG: NAV-SAT Exception: {type(e).__name__}: {e}")
-            logger.error(f"🔍 DEBUG: NAV-SAT traceback", exc_info=True)
+            logger.error(f"NAV-SAT Exception: {type(e).__name__}: {e}")
+            logger.error(f"NAV-SAT traceback", exc_info=True)
             # =========================== DEBUG LOGGING END =============================
             logger.debug(f"Error processing NAV-SAT message: {e}")
             self.diagnostics.log_error("GPS NAV-SAT data processing error")
@@ -1371,7 +1376,7 @@ class GPSHandler:
             msg_name = msg_map.get((message.clsID, message.msgID), f"0x{message.clsID:02X}-0x{message.msgID:02X}")
             
             # =========================== DEBUG LOGGING START ===========================
-            logger.info(f"🔍 DEBUG: ✅ Configuration ACK for {msg_name}")
+            logger.debug(f" ✅ Configuration ACK for {msg_name}")
             # =========================== DEBUG LOGGING END =============================
             
             # Count successful configuration acknowledgments
@@ -1480,7 +1485,7 @@ class GPSHandler:
         # =========================== DEBUG LOGGING START ===========================
         if hasattr(self, 'latest_data'):
             data_keys = list(self.latest_data.keys())
-            logger.info(f"🔍 DEBUG: get_latest_data() called - available keys: {data_keys}")
+            logger.debug(f" get_latest_data() called - available keys: {data_keys}")
             
             if data_keys:
                 # Show sample of data for key fields
@@ -1488,7 +1493,7 @@ class GPSHandler:
                 for key in ['timestamp', 'latitude', 'longitude', 'fix_type', 'satellites', 'satellites_used']:
                     if key in self.latest_data:
                         sample_data[key] = self.latest_data[key]
-                logger.info(f"🔍 DEBUG: Sample GPS data: {sample_data}")
+                logger.debug(f" Sample GPS data: {sample_data}")
             else:
                 logger.warning(f"🔍 DEBUG: latest_data exists but is EMPTY!")
                 
