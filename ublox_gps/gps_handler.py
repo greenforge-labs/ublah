@@ -628,8 +628,7 @@ class GPSHandler:
                     # ===== RAW DATA LOGGING END =====
                     
                     # =========================== DEBUG LOGGING START ===========================
-                    if self._debug_logging:
-                        logger.debug(f" Received {len(data)} bytes from GPS")
+                    logger.debug(f" Received {len(data)} bytes from GPS")
                     # =========================== DEBUG LOGGING END =============================
                     
                     # Append new data to buffer
