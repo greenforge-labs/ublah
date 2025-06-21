@@ -348,32 +348,28 @@ class GPSHandler:
         return dyn_models.get(self.config.dynamic_model_type, 2)  # Default: stationary
 
     async def _disable_nmea_output(self) -> None:
-        """Disable NMEA output on USB interface using CFG-USBOUTPROT."""
-        logger.info("Disabling NMEA output on USB interface...")
-        
+        """Disable NMEA output using CFG-USBOUTPROT with fallback to legacy method."""
         try:
-            # Use CFG-USBOUTPROT to disable NMEA on USB
+            # Try the modern CFG-VALSET approach first
+            logger.info("Disabling NMEA output on USB interface...")
+            
+            # Use the static config_set method as per pyubx2 documentation
             # Key ID 0x10780002 = CFG-USBOUTPROT-NMEA
-            # Value: 0 = disable NMEA output on USB
-            cfg_val = UBXMessage('CFG', 'CFG-VALSET', SET,
-                                version=0,
-                                layers=0b00000111,  # RAM + BBR + Flash
-                                transaction=0,
-                                reserved0=0,
-                                cfgData=[(0x10780002, 0)])  # CFG-USBOUTPROT-NMEA: 0 = disable
+            from pyubx2 import SET_LAYER_RAM, SET_LAYER_BBR, SET_LAYER_FLASH, TXN_NONE
             
+            layers = SET_LAYER_RAM | SET_LAYER_BBR | SET_LAYER_FLASH  # All layers
+            transaction = TXN_NONE
+            cfgData = [(0x10780002, 0)]  # CFG-USBOUTPROT-NMEA: 0 = disable
+            
+            cfg_val = UBXMessage.config_set(layers, transaction, cfgData)
             await self._send_ubx_message(cfg_val)
-            logger.info("NMEA output disabled on USB interface")
+            logger.info("NMEA output disabled on USB interface via CFG-USBOUTPROT")
             
-            # Optionally, also disable NMEA on UART1 if needed
+            # Optionally also disable on UART1 if needed
             # This is useful if the device might also be connected via UART
             if hasattr(self, '_disable_uart_nmea') and self._disable_uart_nmea:
-                cfg_uart = UBXMessage('CFG', 'CFG-VALSET', SET,
-                                    version=0,
-                                    layers=0b00000111,  # RAM + BBR + Flash
-                                    transaction=0,
-                                    reserved0=0,
-                                    cfgData=[(0x10740002, 0)])  # CFG-UART1OUTPROT-NMEA: 0 = disable
+                cfgData_uart = [(0x10740002, 0)]  # CFG-UART1OUTPROT-NMEA: 0 = disable
+                cfg_uart = UBXMessage.config_set(layers, transaction, cfgData_uart)
                 await self._send_ubx_message(cfg_uart)
                 logger.info("NMEA output also disabled on UART1 interface")
                 
