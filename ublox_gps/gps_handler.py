@@ -613,8 +613,23 @@ class GPSHandler:
                     data_timeout_warning_logged = False
                     data_timeout_poll_sent = False
                     
+                    # ===== RAW DATA LOGGING START =====
+                    # Log first 100 bytes of raw data in hex format to see what's coming through
+                    hex_preview = data[:100].hex(' ')
+                    logger.debug(f"🔍 RAW DATA (first 100 bytes): {hex_preview}")
+                    # Also log ASCII representation for NMEA sentences
+                    try:
+                        ascii_preview = data[:100].decode('ascii', errors='replace')
+                        # Replace non-printable characters with dots for clarity
+                        ascii_preview = ''.join(c if c.isprintable() or c in '\r\n' else '.' for c in ascii_preview)
+                        logger.debug(f"🔍 RAW DATA ASCII: {ascii_preview}")
+                    except:
+                        pass
+                    # ===== RAW DATA LOGGING END =====
+                    
                     # =========================== DEBUG LOGGING START ===========================
-                    logger.debug(f" Read {len(data)} bytes")
+                    if self._debug_logging:
+                        logger.debug(f" Received {len(data)} bytes from GPS")
                     # =========================== DEBUG LOGGING END =============================
                     
                     # Append new data to buffer
@@ -768,6 +783,7 @@ class GPSHandler:
                 else:
                     # Not enough data to check, keep it
                     filtered.append(buffer[i])
+            
             else:
                 # Not a $ character, keep it
                 filtered.append(buffer[i])
