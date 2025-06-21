@@ -892,7 +892,7 @@ class GPSHandler:
                 else:
                     # =========================== DEBUG LOGGING START ===========================
                     logger.debug(f" Unhandled HNR message: {msg_id}")
-                    # =========================== DEBUG LOGGING END ===========================
+                    # =========================== DEBUG LOGGING END =============================
                     pass
             
             # Handle Enhanced Sensor Fusion messages (ZED-F9R specific)
@@ -901,13 +901,13 @@ class GPSHandler:
                     # =========================== DEBUG LOGGING START ===========================
                     logger.debug(f" Received ESF-INS message, adding to debug log")
                     logger.debug(f" ESF-INS attributes: {dir(message)}")
-                    # =========================== DEBUG LOGGING END ===========================
+                    # =========================== DEBUG LOGGING END =============================
                     # Just log for now, implement processing later if needed
                     pass
                 else:
                     # =========================== DEBUG LOGGING START ===========================
                     logger.debug(f" Unhandled ESF message: {msg_id}")
-                    # =========================== DEBUG LOGGING END ===========================
+                    # =========================== DEBUG LOGGING END =============================
                     pass
                 
             # Handle ACK messages
@@ -919,7 +919,7 @@ class GPSHandler:
                 else:
                     # =========================== DEBUG LOGGING START ===========================
                     logger.debug(f" Unhandled ACK message: {msg_id}")
-                    # =========================== DEBUG LOGGING END ===========================
+                    # =========================== DEBUG LOGGING END =============================
                     pass
                 
             # Handle MON messages
@@ -1094,6 +1094,10 @@ class GPSHandler:
             # =========================== DEBUG LOGGING START ===========================
             logger.debug(f"Processing NAV-HPPOSLLH - checking fields...")
             logger.debug(f"Message attributes: {dir(message)}")
+            # Check for flags field with different possible names
+            for attr_name in ['flags', 'flag', 'validity', 'valid', 'invalidLlh']:
+                if hasattr(message, attr_name):
+                    logger.debug(f"Found attribute '{attr_name}' with value: {getattr(message, attr_name)}")
             # =========================== DEBUG LOGGING END =============================
             
             lat_hp = getattr(message, 'latHp', 0)
@@ -1106,6 +1110,9 @@ class GPSHandler:
             hp_height = (message.height + height_hp * 1e-1) / 1000.0
             hp_hmsl = (message.hMSL + hmsl_hp * 1e-1) / 1000.0
             
+            # pyubx2 expands bit fields - use invalidLlh instead of flags
+            invalid_llh_value = getattr(message, 'invalidLlh', 0)
+            
             self.latest_data.update({
                 'hp_timestamp': datetime.utcnow(),
                 'hp_latitude': hp_lat,
@@ -1114,8 +1121,12 @@ class GPSHandler:
                 'hp_hmsl': hp_hmsl,
                 'hp_horizontal_accuracy': message.hAcc / 10000.0,  # Convert 0.1mm to m
                 'hp_vertical_accuracy': message.vAcc / 10000.0,
-                'hp_flags': message.flags,
-                'hp_invalid_llh': bool(message.flags & 0x01),
+                # =========================== DEBUG LOGGING START ===========================
+                # NOTE: pyubx2 expands flags bit field - using invalidLlh attribute
+                # In raw UBX, this would be bit 0 of the flags byte
+                # =========================== DEBUG LOGGING END =============================
+                'hp_flags': invalid_llh_value,  # Store the invalidLlh bit value
+                'hp_invalid_llh': bool(invalid_llh_value),
             })
             
             # =========================== DEBUG LOGGING START ===========================
@@ -1133,123 +1144,6 @@ class GPSHandler:
             # =========================== DEBUG LOGGING END =============================
             logger.debug(f"Error processing NAV-HPPOSLLH message: {e}")
             self.diagnostics.log_error("GPS NAV-HPPOSLLH data processing error")
-
-    async def _process_nmea_data(self, data) -> None:
-        """Process NMEA sentences from the buffer.
-        
-        Args:
-            data: Buffer containing NMEA data
-        """
-        try:
-            # =========================== DEBUG LOGGING START ===========================
-            logger.debug(f" Processing NMEA data from buffer")
-            # =========================== DEBUG LOGGING END ===========================
-            
-            # Convert bytes to string if needed
-            if isinstance(data, (bytes, bytearray)):
-                data_str = data.decode('ascii', errors='ignore')
-            else:
-                data_str = str(data)
-            
-            # Find all NMEA sentences (starting with $ and ending with \r\n)
-            import pynmea2
-            import re
-            
-            # Find all potential NMEA sentences
-            nmea_pattern = r'\$.*?\\r\\n|\$.*?\r\n'
-            sentences = re.findall(nmea_pattern, data_str)
-            
-            if not sentences:
-                # =========================== DEBUG LOGGING START ===========================
-                logger.debug(f" No complete NMEA sentences found in buffer")
-                # =========================== DEBUG LOGGING END ===========================
-                return
-            
-            # =========================== DEBUG LOGGING START ===========================
-            logger.debug(f" Found {len(sentences)} potential NMEA sentences")
-            # =========================== DEBUG LOGGING END ===========================
-            
-            for sentence in sentences:
-                try:
-                    # =========================== DEBUG LOGGING START ===========================
-                    logger.debug(f" Processing NMEA sentence: {sentence[:20]}...")
-                    # =========================== DEBUG LOGGING END ===========================
-                    
-                    # Clean up the sentence
-                    sentence = sentence.strip()
-                    if not sentence.startswith('$'):
-                        continue
-                        
-                    # Parse the NMEA sentence
-                    msg = pynmea2.parse(sentence)
-                    
-                    # =========================== DEBUG LOGGING START ===========================
-                    logger.debug(f" Parsed NMEA sentence: {msg.sentence_type}")
-                    logger.debug(f" NMEA data: {msg}")
-                    # =========================== DEBUG LOGGING END ===========================
-                    
-                    # Process different NMEA sentence types
-                    if msg.sentence_type == 'GGA':  # Global Positioning System Fix Data
-                        if msg.latitude and msg.longitude:
-                            self.latest_data.update({
-                                'nmea_timestamp': datetime.utcnow(),
-                                'nmea_latitude': msg.latitude,
-                                'nmea_longitude': msg.longitude,
-                                'nmea_altitude': float(msg.altitude) if msg.altitude else None,
-                                'nmea_num_sats': int(msg.num_sats) if msg.num_sats else 0,
-                                'nmea_quality': msg.gps_qual,
-                                'nmea_hdop': float(msg.horizontal_dil) if msg.horizontal_dil else None
-                            })
-                            # =========================== DEBUG LOGGING START ===========================
-                            logger.debug(f" Updated latest_data with GGA information")
-                            # =========================== DEBUG LOGGING END ===========================
-                    
-                    elif msg.sentence_type == 'RMC':  # Recommended Minimum Navigation Information
-                        if msg.latitude and msg.longitude:
-                            self.latest_data.update({
-                                'nmea_timestamp': datetime.utcnow(),
-                                'nmea_latitude': msg.latitude,
-                                'nmea_longitude': msg.longitude,
-                                'nmea_speed': float(msg.spd_over_grnd) if msg.spd_over_grnd else None,
-                                'nmea_course': float(msg.true_course) if msg.true_course else None,
-                                'nmea_status': msg.status
-                            })
-                            # =========================== DEBUG LOGGING START ===========================
-                            logger.debug(f" Updated latest_data with RMC information")
-                            # =========================== DEBUG LOGGING END ===========================
-                    
-                    elif msg.sentence_type == 'GSA':  # GPS DOP and active satellites
-                        self.latest_data.update({
-                            'nmea_timestamp': datetime.utcnow(),
-                            'nmea_mode': msg.mode,
-                            'nmea_fix_type': int(msg.mode_fix_type) if msg.mode_fix_type else 0,
-                            'nmea_pdop': float(msg.pdop) if msg.pdop else None,
-                            'nmea_hdop': float(msg.hdop) if msg.hdop else None,
-                            'nmea_vdop': float(msg.vdop) if msg.vdop else None
-                        })
-                        # =========================== DEBUG LOGGING START ===========================
-                        logger.debug(f" Updated latest_data with GSA information")
-                        # =========================== DEBUG LOGGING END ===========================
-                    
-                    elif msg.sentence_type == 'GSV':  # Satellites in view
-                        # Just log GSV messages for now
-                        # =========================== DEBUG LOGGING START ===========================
-                        logger.debug(f" Received GSV message: {msg.num_sv_in_view} satellites in view")
-                        # =========================== DEBUG LOGGING END ===========================
-                    
-                except Exception as nmea_error:
-                    # =========================== DEBUG LOGGING START ===========================
-                    logger.warning(f"🔍 DEBUG: Error parsing NMEA sentence: {nmea_error}")
-                    # =========================== DEBUG LOGGING END ===========================
-            
-            self.diagnostics.record_operation("gps_handler", "nmea_processing", 1.0, True)
-            
-        except Exception as e:
-            # =========================== DEBUG LOGGING START ===========================
-            logger.error(f"NMEA processing error: {e}")
-            # =========================== DEBUG LOGGING END ===========================
-            logger.error(f"Error processing NMEA data: {e}")
-            self.diagnostics.record_operation("gps_handler", "nmea_processing", 0.0, False, str(e))
 
     async def _process_nav_status(self, message) -> None:
         """Process NAV-STATUS message for navigation status information with error handling."""
@@ -1388,7 +1282,7 @@ class GPSHandler:
             
         except Exception as e:
             logger.error(f"Error processing ACK-ACK message: {e}")
-            self.diagnostics.log_error("GPS ACK-ACK data processing error")
+            self.diagnostics.record_operation("gps_handler", "config_ack", 0.0, False, str(e))
 
     async def _process_ack_nack(self, message) -> None:
         """Process ACK-NACK message for configuration failure with error handling."""
