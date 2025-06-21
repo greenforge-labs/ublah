@@ -1,5 +1,5 @@
 name: "u-blox GPS RTK"
-version: "0.3.19"  # Satellite monitoring enhancements
+version: "0.3.20"  # Satellite monitoring enhancements
 slug: ublox_gps_rtk
 description: "HomeAssistant add-in for u-blox ZED-F9P GPS with NTRIP RTK corrections"
 url: "https://github.com/greenforge-labs/ublah"
@@ -31,7 +31,12 @@ options:
   dead_reckoning_enabled: false
   disable_nmea_output: true
   update_rate_hz: 1
-  constellation: ["GPS", "GLONASS", "GALILEO", "BEIDOU"]
+  constellation_gps: true
+  constellation_glonass: true
+  constellation_galileo: true
+  constellation_beidou: true
+  constellation_qzss: false
+  constellation_sbas: false
   ntrip_enabled: true
   ntrip_host: ""
   ntrip_port: 2101
@@ -46,7 +51,12 @@ schema:
   dead_reckoning_enabled: "bool"
   disable_nmea_output: "bool"
   update_rate_hz: "int(1,10)" 
-  constellation: "list(GPS|GLONASS|GALILEO|BEIDOU|QZSS|SBAS)"
+  constellation_gps: "bool"
+  constellation_glonass: "bool"
+  constellation_galileo: "bool"
+  constellation_beidou: "bool"
+  constellation_qzss: "bool"
+  constellation_sbas: "bool"
   ntrip_enabled: "bool"
   ntrip_host: "str?"
   ntrip_port: "int(1,65535)?"

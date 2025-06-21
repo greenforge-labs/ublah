@@ -38,7 +38,12 @@ class Config:
             "gps_device": "/dev/ttyUSB0",
             "gps_baudrate": 38400,
             "update_rate_hz": 1,
-            "constellation": ["GPS", "GLONASS", "GALILEO", "BEIDOU"],
+            "constellation_gps": True,
+            "constellation_glonass": True,
+            "constellation_galileo": True,
+            "constellation_beidou": True,
+            "constellation_qzss": False,
+            "constellation_sbas": False,
             "ntrip_enabled": False,
             "ntrip_host": "",
             "ntrip_port": 2101,
@@ -82,18 +87,36 @@ class Config:
     
     @property
     def constellation(self) -> List[str]:
-        """Get constellation list, handling both old string and new list formats."""
-        constellation_config = self.get("constellation", ["GPS", "GLONASS", "GALILEO", "BEIDOU"])
+        """Get constellation list from boolean fields, with backward compatibility for old list format."""
+        # Check if old list format exists for backward compatibility
+        old_constellation = self.get("constellation", None)
+        if old_constellation is not None:
+            # Handle backward compatibility with old string and list formats
+            if isinstance(old_constellation, str):
+                return [const.strip() for const in old_constellation.split('+')]
+            elif isinstance(old_constellation, list):
+                return old_constellation
         
-        # Handle backward compatibility with old string format
-        if isinstance(constellation_config, str):
-            # Convert old "GPS+GLONASS+GALILEO+BEIDOU" format to list
-            return [const.strip() for const in constellation_config.split('+')]
-        elif isinstance(constellation_config, list):
-            return constellation_config
-        else:
-            # Fallback to default if invalid format
+        # Use new boolean field format
+        enabled_constellations = []
+        constellation_map = {
+            "constellation_gps": "GPS",
+            "constellation_glonass": "GLONASS", 
+            "constellation_galileo": "GALILEO",
+            "constellation_beidou": "BEIDOU",
+            "constellation_qzss": "QZSS",
+            "constellation_sbas": "SBAS"
+        }
+        
+        for config_key, constellation_name in constellation_map.items():
+            if self.get(config_key, False):
+                enabled_constellations.append(constellation_name)
+        
+        # Fallback to default if no constellations enabled
+        if not enabled_constellations:
             return ["GPS", "GLONASS", "GALILEO", "BEIDOU"]
+        
+        return enabled_constellations
     
     @property
     def ntrip_enabled(self) -> bool:

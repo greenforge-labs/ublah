@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 async def check_raw_gps_data():
     """Check if GPS device is sending any raw data."""
-    device_path = "/dev/ttyUSB0"
+    device_path = "/dev/ttyACM0"
     baudrate = 38400
     
     logger.info(f"🔍 Checking raw data from {device_path} @ {baudrate} baud...")
