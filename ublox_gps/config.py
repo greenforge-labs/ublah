@@ -59,6 +59,7 @@ class Config:
             "high_rate_positioning": False,
             "hnr_rate_hz": 10,  # High rate navigation for ZED-F9R (up to 30Hz)
             "disable_nmea_output": True,
+            "disable_rtcm3_output": True,
             "enable_esf_ins": False,  # Enable inertial sensor fusion data
             "enable_nav_cov": False,  # Enable covariance matrices
             # RTCM filtering and validation options
@@ -177,6 +178,10 @@ class Config:
     @property
     def disable_nmea_output(self) -> bool:
         return self.get("disable_nmea_output", True)
+
+    @property
+    def disable_rtcm3_output(self) -> bool:
+        return self.get("disable_rtcm3_output", True)
 
     @property
     def enable_esf_ins(self) -> bool:
