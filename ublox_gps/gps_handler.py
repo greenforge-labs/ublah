@@ -103,9 +103,42 @@ class GPSHandler:
         device_path = self.config.gps_device
         baudrate = self.config.gps_baudrate
         
+        # =========================== DEBUG LOGGING START ===========================
+        logger.info("🔍 DEBUG: Starting GPS device connection process")
+        logger.info(f"🔍 DEBUG: Attempting connection to: {device_path}")
+        logger.info(f"🔍 DEBUG: Baudrate: {baudrate}")
+        
+        # Check if device path exists
+        if self._device_exists(device_path):
+            logger.info(f"🔍 DEBUG: ✅ Device path exists: {device_path}")
+        else:
+            logger.error(f"🔍 DEBUG: ❌ Device path does NOT exist: {device_path}")
+        
+        # List all available serial ports for comparison
+        available_ports = self._list_available_ports()
+        logger.info(f"🔍 DEBUG: Available serial ports: {available_ports}")
+        
+        # Check device permissions (Linux/Unix systems)
+        try:
+            import os
+            import stat
+            if os.path.exists(device_path):
+                file_stat = os.stat(device_path)
+                permissions = stat.filemode(file_stat.st_mode)
+                logger.info(f"🔍 DEBUG: Device permissions: {permissions}")
+                logger.info(f"🔍 DEBUG: Device owner UID: {file_stat.st_uid}")
+                logger.info(f"🔍 DEBUG: Current process UID: {os.getuid()}")
+        except Exception as perm_e:
+            logger.warning(f"🔍 DEBUG: Could not check device permissions: {perm_e}")
+        # =========================== DEBUG LOGGING END =============================
+        
         logger.info(f"🔌 Connecting to {device_path} @ {baudrate} baud...")
         
         try:
+            # =========================== DEBUG LOGGING START ===========================
+            logger.info("🔍 DEBUG: Calling serial_asyncio.open_serial_connection...")
+            # =========================== DEBUG LOGGING END =============================
+            
             # Open serial connection
             self.reader, self.writer = await serial_asyncio.open_serial_connection(
                 url=device_path,
@@ -115,6 +148,12 @@ class GPSHandler:
                 stopbits=1,
                 timeout=2
             )
+            
+            # =========================== DEBUG LOGGING START ===========================
+            logger.info("🔍 DEBUG: ✅ serial_asyncio.open_serial_connection() completed successfully")
+            logger.info(f"🔍 DEBUG: Reader object: {type(self.reader)}")
+            logger.info(f"🔍 DEBUG: Writer object: {type(self.writer)}")
+            # =========================== DEBUG LOGGING END =============================
             
             logger.info(f"✅ Serial port opened at {baudrate} baud")
             
@@ -181,6 +220,13 @@ class GPSHandler:
             # Disable NMEA output if requested
             if self.config.disable_nmea_output:
                 await self._disable_nmea_output()
+            
+            # =========================== CRITICAL FIX START ===========================
+            # Save configuration to non-volatile memory (BBR/Flash)
+            # This was the missing piece causing GPS connectivity issues!
+            logger.info("💾 Saving device configuration to non-volatile memory...")
+            await self._save_device_configuration()
+            # =========================== CRITICAL FIX END =============================
             
             logger.info("Device configuration completed")
             
@@ -946,3 +992,27 @@ class GPSHandler:
         except Exception as e:
             logger.error(f"Failed to send RTCM corrections: {e}")
             self.diagnostics.log_error("Failed to send RTCM corrections")
+
+    async def _save_device_configuration(self) -> None:
+        """Save device configuration to non-volatile memory (BBR/Flash) with error handling."""
+        try:
+            # Create CFG-CFG message to save configuration
+            cfg_msg = UBXMessage('CFG', 'CFG-CFG', SET, clearMask=0x0000, saveMask=0xFFFF, loadMask=0x0000, deviceMask=0x0000)
+            
+            # Send CFG-CFG message to save configuration
+            await self._send_ubx_message(cfg_msg)
+            
+            # Wait for ACK-ACK message to confirm configuration save
+            await asyncio.sleep(0.1)  # Small delay for device processing
+            
+            logger.info("💾 Device configuration saved to non-volatile memory")
+            
+        except GPSConfigurationError as e:
+            logger.error(f"Failed to save device configuration: {e}")
+            self.diagnostics.log_error("Failed to save device configuration")
+            raise
+        
+        except Exception as e:
+            logger.error(f"Failed to save device configuration: {e}")
+            self.diagnostics.log_error("Failed to save device configuration")
+            raise

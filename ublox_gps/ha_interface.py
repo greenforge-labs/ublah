@@ -105,6 +105,14 @@ class HomeAssistantInterface:
     
     async def initialize_entities(self) -> None:
         """Initialize HomeAssistant entities."""
+        # =========================== DEBUG LOGGING START ===========================
+        logger.info("🔍 DEBUG: Starting HomeAssistant entity initialization...")
+        logger.info(f"🔍 DEBUG: HomeAssistant URL: {self.config.homeassistant_url}")
+        logger.info(f"🔍 DEBUG: SUPERVISOR_TOKEN available: {bool(self.config.homeassistant_token)}")
+        if self.config.homeassistant_token:
+            logger.info(f"🔍 DEBUG: SUPERVISOR_TOKEN length: {len(self.config.homeassistant_token)} chars")
+        # =========================== DEBUG LOGGING END =============================
+        
         if not self.config.homeassistant_token:
             logger.error("SUPERVISOR_TOKEN environment variable not found - this indicates a HomeAssistant configuration issue")
             logger.error("Make sure 'homeassistant_api: true' is set in config.yaml")
@@ -112,6 +120,10 @@ class HomeAssistantInterface:
         
         logger.info("Initializing HomeAssistant entities...")
         logger.info(f"Using SUPERVISOR_TOKEN for authentication")
+        
+        # =========================== DEBUG LOGGING START ===========================
+        logger.info("🔍 DEBUG: Creating aiohttp ClientSession...")
+        # =========================== DEBUG LOGGING END =============================
         
         self.session = aiohttp.ClientSession(
             headers={
@@ -121,12 +133,28 @@ class HomeAssistantInterface:
             timeout=aiohttp.ClientTimeout(total=10)
         )
         
+        # =========================== DEBUG LOGGING START ===========================
+        logger.info("🔍 DEBUG: ✅ aiohttp ClientSession created successfully")
+        # =========================== DEBUG LOGGING END =============================
+        
         try:
+            # =========================== DEBUG LOGGING START ===========================
+            logger.info("🔍 DEBUG: Registering device with HomeAssistant...")
+            # =========================== DEBUG LOGGING END =============================
+            
             # Register device
             await self._register_device()
             
+            # =========================== DEBUG LOGGING START ===========================
+            logger.info("🔍 DEBUG: ✅ Device registration completed")
+            logger.info(f"🔍 DEBUG: Number of entities to initialize: {len(self.entities)}")
+            # =========================== DEBUG LOGGING END =============================
+            
             # Initialize all entities
             for entity_id, entity_config in self.entities.items():
+                # =========================== DEBUG LOGGING START ===========================
+                logger.info(f"🔍 DEBUG: Initializing entity: {entity_id}")
+                # =========================== DEBUG LOGGING END =============================
                 await self._initialize_entity(entity_id, entity_config)
             
             self.entities_initialized = True

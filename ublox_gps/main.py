@@ -39,23 +39,65 @@ class UbloxGPSService:
         logger.info("Starting u-blox GPS RTK service...")
         
         try:
+            # =========================== DEBUG LOGGING START ===========================
+            logger.info("🔍 DEBUG: Initializing GPS service components...")
+            logger.info("🔍 DEBUG: Step 1/5: Loading configuration...")
+            logger.info(f"🔍 DEBUG: GPS Device: {self.config.gps_device}")
+            logger.info(f"🔍 DEBUG: GPS Baudrate: {self.config.gps_baudrate}")
+            logger.info(f"🔍 DEBUG: Device Type: {self.config.device_type}")
+            logger.info(f"🔍 DEBUG: NTRIP Enabled: {self.config.ntrip_enabled}")
+            logger.info(f"🔍 DEBUG: HomeAssistant URL: {self.config.homeassistant_url}")
+            # =========================== DEBUG LOGGING END =============================
+            
             # Initialize components
+            # =========================== DEBUG LOGGING START ===========================
+            logger.info("🔍 DEBUG: Step 2/5: Creating GPSHandler instance...")
+            # =========================== DEBUG LOGGING END =============================
             self.gps_handler = GPSHandler(self.config)
+            
+            # =========================== DEBUG LOGGING START ===========================
+            logger.info("🔍 DEBUG: Step 3/5: Creating HomeAssistantInterface instance...")
+            # =========================== DEBUG LOGGING END =============================
             self.ha_interface = HomeAssistantInterface(self.config)
             
             # Initialize NTRIP client if enabled
             if self.config.ntrip_enabled and self.config.ntrip_host:
+                # =========================== DEBUG LOGGING START ===========================
+                logger.info("🔍 DEBUG: Step 4a/5: Creating NTRIPClient instance (NTRIP enabled)...")
+                # =========================== DEBUG LOGGING END =============================
                 self.ntrip_client = NTRIPClient(self.config)
+            else:
+                # =========================== DEBUG LOGGING START ===========================
+                logger.info("🔍 DEBUG: Step 4b/5: Skipping NTRIP client (disabled or no host)...")
+                # =========================== DEBUG LOGGING END =============================
             
             # Start GPS handler
+            # =========================== DEBUG LOGGING START ===========================
+            logger.info("🔍 DEBUG: Step 5a/5: Starting GPS handler (CRITICAL STEP)...")
+            # =========================== DEBUG LOGGING END =============================
             await self.gps_handler.start()
+            
+            # =========================== DEBUG LOGGING START ===========================
+            logger.info("🔍 DEBUG: ✅ GPS handler started successfully!")
+            logger.info(f"🔍 DEBUG: GPS handler connected status: {self.gps_handler.connected}")
+            # =========================== DEBUG LOGGING END =============================
             
             # Start NTRIP client if configured
             if self.ntrip_client:
+                # =========================== DEBUG LOGGING START ===========================
+                logger.info("🔍 DEBUG: Step 5b/5: Starting NTRIP client...")
+                # =========================== DEBUG LOGGING END =============================
                 await self.ntrip_client.start()
             
             # Initialize HomeAssistant entities
+            # =========================== DEBUG LOGGING START ===========================
+            logger.info("🔍 DEBUG: Step 5c/5: Initializing HomeAssistant entities...")
+            # =========================== DEBUG LOGGING END =============================
             await self.ha_interface.initialize_entities()
+            
+            # =========================== DEBUG LOGGING START ===========================
+            logger.info("🔍 DEBUG: ✅ HomeAssistant entities initialized!")
+            # =========================== DEBUG LOGGING END =============================
             
             self.running = True
             logger.info("u-blox GPS RTK service started successfully")
@@ -64,6 +106,12 @@ class UbloxGPSService:
             await self._run_service_loop()
             
         except Exception as e:
+            # =========================== DEBUG LOGGING START ===========================
+            logger.error(f"🔍 DEBUG: ❌ CRITICAL ERROR in service startup: {e}")
+            logger.error(f"🔍 DEBUG: Exception type: {type(e)}")
+            import traceback
+            logger.error(f"🔍 DEBUG: Full traceback:\n{traceback.format_exc()}")
+            # =========================== DEBUG LOGGING END =============================
             logger.error(f"Error starting GPS service: {e}")
             raise
     
