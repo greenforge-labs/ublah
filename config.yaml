@@ -1,5 +1,5 @@
 name: "u-blox GPS RTK"
-version: "0.3.22"  # Satellite monitoring enhancements
+version: "0.3.23"  # Satellite monitoring enhancements
 slug: ublox_gps_rtk
 description: "HomeAssistant add-in for u-blox ZED-F9P GPS with NTRIP RTK corrections"
 url: "https://github.com/greenforge-labs/ublah"

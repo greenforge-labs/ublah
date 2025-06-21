@@ -165,17 +165,12 @@ class GPSHandler:
                 # Record successful connection
                 self.diagnostics.record_operation("gps_handler", "connect", 1.0, True)
                 
-                # Configure device (only if we have a connection)
-                await self._configure_device()
-                
                 # =========================== DEBUG LOGGING START ===========================
-                logger.info("🔍 DEBUG: Device configuration completed, reader task will be created in start() method")
+                logger.info("🔍 DEBUG: Device connected successfully, configuration will happen in start() method")
                 # =========================== DEBUG LOGGING END =============================
                 
-                logger.info("GPS handler started successfully")
-                
             except Exception as e:
-                logger.error(f"Error during GPS configuration: {e}")
+                logger.error(f"Error during GPS connection: {e}")
                 self.diagnostics.record_operation("gps_handler", "connect", 0.0, False, str(e))
                 await self.stop()
                 raise
@@ -505,6 +500,8 @@ class GPSHandler:
         ubx_message_count = 0
         nav_message_count = 0
         ack_message_count = 0
+        last_data_time = asyncio.get_event_loop().time()
+        no_data_warnings = 0
         
         while not self._stop_event.is_set():
             try:
@@ -512,6 +509,8 @@ class GPSHandler:
                 
                 if data:
                     data_received_count += 1
+                    last_data_time = asyncio.get_event_loop().time()
+                    no_data_warnings = 0  # Reset warning counter
                     
                     # =========================== DEBUG LOGGING START ===========================
                     if data_received_count <= 10 or data_received_count % 100 == 0:
@@ -578,9 +577,31 @@ class GPSHandler:
                         await self._process_nmea_data(data)
                 
             except asyncio.TimeoutError:
-                # No data received, continue
-                continue
+                # Check if we haven't received data for a while
+                current_time = asyncio.get_event_loop().time()
+                time_since_last_data = current_time - last_data_time
                 
+                # =========================== DEBUG LOGGING START ===========================
+                # Log every 5 seconds of no data
+                if time_since_last_data > 5 and no_data_warnings % 50 == 0:  # Log every 5 seconds
+                    logger.warning(f"🔍 DEBUG: No data received for {time_since_last_data:.1f} seconds")
+                    logger.info(f"🔍 DEBUG: Total chunks received: {data_received_count}, NAV messages: {nav_message_count}")
+                    
+                    # After 10 seconds, try polling the device
+                    if time_since_last_data > 10 and no_data_warnings % 100 == 0:
+                        logger.info("🔍 DEBUG: Attempting to poll device with MON-VER request...")
+                        try:
+                            # Request device version to see if it's still responsive
+                            from pyubx2 import UBXMessage, GET
+                            poll_msg = UBXMessage('MON', 'MON-VER', GET)
+                            await self._send_ubx_message(poll_msg)
+                        except Exception as e:
+                            logger.error(f"🔍 DEBUG: Failed to poll device: {e}")
+                # =========================== DEBUG LOGGING END =============================
+                
+                no_data_warnings += 1
+                continue
+            
             except Exception as e:
                 logger.error(f"Error reading GPS data: {e}")
                 await asyncio.sleep(0.1)  # Brief pause on error
