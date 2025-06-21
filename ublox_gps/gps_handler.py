@@ -6,9 +6,12 @@ Supports ZED-F9P and ZED-F9R devices with comprehensive validation and monitorin
 import asyncio
 import logging
 import serial_asyncio
+import time
+import re
+from io import BytesIO
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
-from pyubx2 import UBXMessage, UBX_MSGIDS, SET
+from pyubx2 import UBXMessage, UBX_MSGIDS, SET, UBXReader
 from pynmea2 import parse as nmea_parse
 from serial.tools import list_ports
 from diagnostics import SystemDiagnostics
@@ -525,6 +528,8 @@ class GPSHandler:
         """Read data from the GPS device and process it with improved handling of partial messages."""
         # =========================== DEBUG LOGGING START ===========================
         logger.info("🔍 DEBUG: GPS data reading loop started")
+        logger.info(f"🔍 DEBUG: Reader object type: {type(self._reader)}")
+        logger.info(f"🔍 DEBUG: Writer object type: {type(self._writer)}")
         # =========================== DEBUG LOGGING END =============================
         
         # Initialize counters and state variables
@@ -538,7 +543,16 @@ class GPSHandler:
         while not self._stop_event.is_set():
             try:
                 # Read data from the device
-                data = await asyncio.wait_for(self._reader.read(1024), timeout=1.0)
+                try:
+                    data = await asyncio.wait_for(self._reader.read(1024), timeout=1.0)
+                    # =========================== DEBUG LOGGING START ===========================
+                    logger.info(f"🔍 DEBUG: Attempted to read data, received {len(data) if data else 0} bytes")
+                    if data and len(data) > 0:
+                        logger.info(f"🔍 DEBUG: First few bytes: {data[:min(10, len(data))].hex()}")
+                    # =========================== DEBUG LOGGING END ===========================
+                except Exception as read_error:
+                    logger.error(f"🔍 DEBUG: Error reading from device: {read_error}")
+                    data = None
                 
                 if data:
                     # Reset timeout tracking
