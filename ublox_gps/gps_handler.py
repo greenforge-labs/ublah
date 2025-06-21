@@ -681,6 +681,17 @@ class GPSHandler:
                               'hMSL', 'hAcc', 'vAcc', 'velN', 'velE', 'velD', 'gSpeed', 'headMot',
                               'sAcc', 'headAcc', 'pDOP', 'flags3', 'headVeh']
             
+            # First ensure all essential fields (needed to build basic position) are present.
+            essential_fields = ['lat', 'lon', 'height', 'fixType', 'numSV', 'hAcc', 'vAcc']
+            missing_essential = [field for field in essential_fields if not hasattr(message, field)]
+            if missing_essential:
+                # =========================== DEBUG LOGGING START ===========================
+                logger.warning(f"🔍 DEBUG: NAV-PVT missing ESSENTIAL fields: {missing_essential}")
+                # =========================== DEBUG LOGGING END =============================
+                logger.warning(f"📍 NAV-PVT missing ESSENTIAL fields: {missing_essential}")
+                return
+
+            # Capture any additional non-essential fields purely for debugging purposes.
             missing_fields = [field for field in required_fields if not hasattr(message, field)]
             if missing_fields:
                 # =========================== DEBUG LOGGING START ===========================
@@ -957,6 +968,25 @@ class GPSHandler:
                 return "RTK Fixed + DR"
         
         return base_name
+
+    async def _process_nmea_data(self, raw: bytes) -> None:
+        """Decode a raw byte chunk, extract individual NMEA sentences and
+        delegate each one to :py:meth:`_process_nmea_message`.
+
+        This prevents the read loop from crashing when a chunk contains NMEA
+        text and ensures sentences are parsed asynchronously.
+        """
+        try:
+            text = raw.decode('ascii', errors='ignore')
+            for line in text.splitlines():
+                if line.startswith('$'):
+                    try:
+                        nmea_msg = nmea_parse(line)
+                        await self._process_nmea_message(nmea_msg)
+                    except Exception as e:
+                        logger.debug(f"Error parsing NMEA line '{line}': {e}")
+        except Exception as e:
+            logger.debug(f"Error processing NMEA data chunk: {e}")
 
     async def _process_nmea_message(self, message) -> None:
         """Process incoming NMEA message with error handling."""
