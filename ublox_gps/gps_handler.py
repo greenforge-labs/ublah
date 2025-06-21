@@ -996,8 +996,17 @@ class GPSHandler:
     async def _save_device_configuration(self) -> None:
         """Save device configuration to non-volatile memory (BBR/Flash) with error handling."""
         try:
+            # =========================== DEBUG LOGGING START ===========================
+            logger.info("🔍 DEBUG: Creating CFG-CFG message with byte masks")
+            # =========================== DEBUG LOGGING END =============================
+            
             # Create CFG-CFG message to save configuration
-            cfg_msg = UBXMessage('CFG', 'CFG-CFG', SET, clearMask=0x0000, saveMask=0xFFFF, loadMask=0x0000, deviceMask=0x0000)
+            # pyubx2 expects masks as bytes for X004 type
+            cfg_msg = UBXMessage('CFG', 'CFG-CFG', SET, 
+                               clearMask=b'\x00\x00\x00\x00',  # Don't clear anything
+                               saveMask=b'\xFF\xFF\xFF\xFF',   # Save all settings
+                               loadMask=b'\x00\x00\x00\x00',   # Don't load anything
+                               deviceMask=b'\x00')              # All devices
             
             # Send CFG-CFG message to save configuration
             await self._send_ubx_message(cfg_msg)
@@ -1011,8 +1020,8 @@ class GPSHandler:
             logger.error(f"Failed to save device configuration: {e}")
             self.diagnostics.log_error("Failed to save device configuration")
             raise
-        
+            
         except Exception as e:
             logger.error(f"Failed to save device configuration: {e}")
             self.diagnostics.log_error("Failed to save device configuration")
-            raise
+            raise GPSConfigurationError(f"Failed to save device configuration: {e}")
