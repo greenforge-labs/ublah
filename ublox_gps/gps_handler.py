@@ -360,10 +360,7 @@ class GPSHandler:
                                 layers=0b00000111,  # RAM + BBR + Flash
                                 transaction=0,
                                 reserved0=0,
-                                cfgData=[
-                                    # CFG-USBOUTPROT-NMEA: Disable NMEA on USB
-                                    (0x10780002, 0)  # Key ID, Value (0 = disable)
-                                ])
+                                cfgData=[(0x10780002, 0)])  # CFG-USBOUTPROT-NMEA: 0 = disable
             
             await self._send_ubx_message(cfg_val)
             logger.info("NMEA output disabled on USB interface")
@@ -376,10 +373,7 @@ class GPSHandler:
                                     layers=0b00000111,  # RAM + BBR + Flash
                                     transaction=0,
                                     reserved0=0,
-                                    cfgData=[
-                                        # CFG-UART1OUTPROT-NMEA: Disable NMEA on UART1
-                                        (0x10740002, 0)  # Key ID, Value (0 = disable)
-                                    ])
+                                    cfgData=[(0x10740002, 0)])  # CFG-UART1OUTPROT-NMEA: 0 = disable
                 await self._send_ubx_message(cfg_uart)
                 logger.info("NMEA output also disabled on UART1 interface")
                 
@@ -531,26 +525,11 @@ class GPSHandler:
         }
         return msg_ids.get(msg_type, 0x00)
     
-    async def _send_ubx_message(self, message: UBXMessage) -> None:
-        """Send UBX message to device with error handling."""
-        if not self.writer or not self.connected:
-            raise GPSConnectionError("GPS device not connected")
-        
-        try:
-            self.writer.write(message.serialize())
-            await asyncio.sleep(0.1)  # Small delay for device processing
-        except GPSConnectionError as e:
-            logger.error(f"Failed to send UBX message: {e}")
-            self.diagnostics.log_error("Failed to send UBX message")
-            raise
-        
-        except Exception as e:
-            logger.error(f"Failed to send UBX message: {e}")
-            self.diagnostics.log_error("Failed to send UBX message")
-            raise
-    
     async def _send_ubx_message(self, message):
         """Send a UBX message to the GPS device."""
+        if not self.writer or not self.connected:
+            raise GPSConnectionError("GPS device not connected")
+            
         try:
             # =========================== DEBUG LOGGING START ===========================
             logger.debug(f" Sending UBX message: {message.identity if hasattr(message, 'identity') else 'Unknown'}")
@@ -570,7 +549,8 @@ class GPSHandler:
             logger.error(f"Error sending UBX message: {e}")
             # =========================== DEBUG LOGGING END =============================
             logger.error(f"Error sending UBX message: {e}")
-            return False
+            self.diagnostics.log_error("Failed to send UBX message")
+            raise
     
     async def _send_poll(self, msg_class, msg_id):
         """Send a poll (GET) message to request data from the GPS device."""
