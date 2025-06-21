@@ -294,33 +294,42 @@ class GPSHandler:
         }
         
         try:
-            # Configure each GNSS system
+            # Build a single CFG-GNSS message containing ALL constellation blocks (per F9 interface spec)
+            blocks: dict[str, int] = {}
+            index = 0
             for constellation, gnss_id in gnss_map.items():
                 enabled = constellation in constellations
-                flags = 0x01 if enabled else 0x00  # Enable/disable
-                
-                logger.info(f"{'Enabling' if enabled else 'Disabling'} {constellation} (ID: {gnss_id})")
-                
-                gnss_msg = UBXMessage('CFG', 'CFG-GNSS', SET,
-                                     msgVer=0,
-                                     numTrkChHw=32,  # Hardware tracking channels
-                                     numTrkChUse=32, # Used tracking channels  
-                                     numConfigBlocks=1,
-                                     gnssId=gnss_id,
-                                     resTrkCh=0,     # Reserved tracking channels
-                                     maxTrkCh=0,     # Maximum tracking channels (0 = use default)
-                                     flags=flags)
-                
-                await self._send_ubx_message(gnss_msg)
-                await asyncio.sleep(0.1)  # Small delay between configurations
-            
-            logger.info("GNSS constellation configuration completed")
-            
+                flags = 0x01 if enabled else 0x00  # bit0 = enable / disable
+
+                logger.info(f"{'Enabling' if enabled else 'Disabling'} {constellation} (ID: {gnss_id}) in composite CFG-GNSS")
+
+                # Append this 8-byte block using pyubx2's indexed field names
+                blocks.update({
+                    f"gnssId_{index}": gnss_id,
+                    f"resTrkCh_{index}": 0,
+                    f"maxTrkCh_{index}": 0,  # 0 = let receiver decide
+                    f"flags_{index}": flags,
+                    f"sigCfgMask_{index}": 0,
+                })
+                index += 1
+
+            # Compose the single message
+            gnss_msg = UBXMessage(
+                'CFG', 'CFG-GNSS', SET,
+                msgVer=0,
+                numTrkChHw=32,
+                numTrkChUse=32,
+                numConfigBlocks=index,
+                **blocks
+            )
+
+            await self._send_ubx_message(gnss_msg)
+            logger.info("GNSS constellation configuration completed (single composite message)")
+
         except GPSConfigurationError as e:
             logger.error(f"Failed to configure GNSS constellations: {e}")
             self.diagnostics.log_error("GPS GNSS constellation configuration error")
             raise
-        
         except Exception as e:
             logger.error(f"Failed to configure GNSS constellations: {e}")
             self.diagnostics.log_error("GPS GNSS constellation configuration error")
@@ -333,7 +342,7 @@ class GPSHandler:
             'automotive': 4, 'sea': 5, 'airborne_1g': 6,
             'airborne_2g': 7, 'airborne_4g': 8, 'wrist': 9
         }
-        return dyn_models.get(self.config.dynamic_model_type, 4)  # Default: automotive
+        return dyn_models.get(self.config.dynamic_model_type, 2)  # Default: stationary
 
     async def _disable_nmea_output(self) -> None:
         """Disable default NMEA message output to reduce data overhead with error handling."""
@@ -349,7 +358,8 @@ class GPSHandler:
                 cfg_msg = UBXMessage('CFG', 'CFG-MSG', SET,
                                    msgClass=0xF0,  # NMEA class
                                    msgID=self._get_nmea_msg_id(msg_type),
-                                   rateUART1=0)  # Disable on UART1
+                                   rateUART1=0,  # Disable on UART1
+                                   rateUSB=0)  # Disable on USB
                 await self._send_ubx_message(cfg_msg)
             except GPSConfigurationError as e:
                 logger.debug(f"Failed to disable {msg_type}: {e}")
@@ -415,7 +425,8 @@ class GPSHandler:
                 cfg_msg = UBXMessage('CFG', 'CFG-MSG', SET,
                                    msgClass=msg_class_code,
                                    msgID=msg_id_code,
-                                   rateUART1=rate)
+                                   rateUART1=rate,
+                                   rateUSB=rate)
                 await self._send_ubx_message(cfg_msg)
                 logger.debug(f"Enabled {msg_type} at rate {rate}Hz")
                 
