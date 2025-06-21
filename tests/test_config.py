@@ -27,6 +27,7 @@ class TestConfig(unittest.TestCase):
             "hnr_rate_hz": 10,
             "enable_esf_ins": True,
             "disable_nmea_output": True,
+            "constellation": ["GPS", "GLONASS", "GALILEO"],
             "rtcm_filtering_enabled": True,
             "rtcm_message_filter": [1005, 1077, 1087, 1097, 1127],
             "ntrip_enabled": True,
@@ -51,6 +52,7 @@ class TestConfig(unittest.TestCase):
             self.assertEqual(config.hnr_rate_hz, 10)
             self.assertTrue(config.enable_esf_ins)
             self.assertTrue(config.disable_nmea_output)
+            self.assertEqual(config.constellation, ["GPS", "GLONASS", "GALILEO"])
     
     def test_config_defaults(self):
         """Test default configuration values."""
@@ -66,6 +68,7 @@ class TestConfig(unittest.TestCase):
             self.assertEqual(config.hnr_rate_hz, 5)
             self.assertFalse(config.enable_esf_ins)
             self.assertFalse(config.disable_nmea_output)
+            self.assertEqual(config.constellation, ["GPS", "GLONASS", "GALILEO", "BEIDOU"])
     
     def test_rtcm_configuration(self):
         """Test RTCM filtering configuration."""
@@ -104,6 +107,7 @@ class TestConfig(unittest.TestCase):
             self.assertEqual(config.gps_device, "/dev/ttyUSB0")
             self.assertEqual(config.gps_baudrate, 38400)
             self.assertEqual(config.device_type, "ZED-F9P")
+            self.assertEqual(config.constellation, ["GPS", "GLONASS", "GALILEO", "BEIDOU"])
     
     def test_config_property_access(self):
         """Test configuration property access methods."""
@@ -119,6 +123,26 @@ class TestConfig(unittest.TestCase):
             # Test get method with defaults
             self.assertEqual(config.get("nonexistent_key", "default_value"), "default_value")
             self.assertEqual(config.get("gps_device", "default"), "/dev/ttyUSB0")
+    
+    def test_constellation_backward_compatibility(self):
+        """Test backward compatibility with string format constellation."""
+        config_json = json.dumps({"constellation": "GPS+GLONASS+GALILEO"})
+        
+        with patch("builtins.open", mock_open(read_data=config_json)):
+            with patch("os.path.exists", return_value=True):
+                config = Config("dummy_path.json")
+                
+                self.assertEqual(config.constellation, ["GPS", "GLONASS", "GALILEO"])
+    
+    def test_constellation_list_format(self):
+        """Test list format constellation."""
+        config_json = json.dumps({"constellation": ["GPS", "GLONASS", "GALILEO"]})
+        
+        with patch("builtins.open", mock_open(read_data=config_json)):
+            with patch("os.path.exists", return_value=True):
+                config = Config("dummy_path.json")
+                
+                self.assertEqual(config.constellation, ["GPS", "GLONASS", "GALILEO"])
 
 
 if __name__ == '__main__':

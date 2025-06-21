@@ -172,6 +172,9 @@ class GPSHandler:
                 await self._configure_navigation_engine()
                 await self._configure_dynamic_model()
             
+            # Configure GNSS constellations
+            await self._configure_constellations()
+            
             # Configure message rates and types
             await self._enable_messages()
             
@@ -231,6 +234,55 @@ class GPSHandler:
         except Exception as e:
             logger.error(f"Failed to configure dynamic model: {e}")
             self.diagnostics.log_error("GPS dynamic model configuration error")
+            raise
+
+    async def _configure_constellations(self) -> None:
+        """Configure UBX-CFG-GNSS for selected GNSS constellations with error handling."""
+        constellations = self.config.constellation
+        logger.info(f"Configuring GNSS constellations: {', '.join(constellations)}")
+        
+        # Map constellation names to GNSS IDs
+        gnss_map = {
+            "GPS": 0,
+            "SBAS": 1,
+            "GALILEO": 2,
+            "BEIDOU": 3,
+            "IMES": 4,
+            "QZSS": 5,
+            "GLONASS": 6
+        }
+        
+        try:
+            # Configure each GNSS system
+            for constellation, gnss_id in gnss_map.items():
+                enabled = constellation in constellations
+                flags = 0x01 if enabled else 0x00  # Enable/disable
+                
+                logger.info(f"{'Enabling' if enabled else 'Disabling'} {constellation} (ID: {gnss_id})")
+                
+                gnss_msg = UBXMessage('CFG', 'CFG-GNSS', SET,
+                                     msgVer=0,
+                                     numTrkChHw=32,  # Hardware tracking channels
+                                     numTrkChUse=32, # Used tracking channels  
+                                     numConfigBlocks=1,
+                                     gnssId=gnss_id,
+                                     resTrkCh=0,     # Reserved tracking channels
+                                     maxTrkCh=0,     # Maximum tracking channels (0 = use default)
+                                     flags=flags)
+                
+                await self._send_ubx_message(gnss_msg)
+                await asyncio.sleep(0.1)  # Small delay between configurations
+            
+            logger.info("GNSS constellation configuration completed")
+            
+        except GPSConfigurationError as e:
+            logger.error(f"Failed to configure GNSS constellations: {e}")
+            self.diagnostics.log_error("GPS GNSS constellation configuration error")
+            raise
+        
+        except Exception as e:
+            logger.error(f"Failed to configure GNSS constellations: {e}")
+            self.diagnostics.log_error("GPS GNSS constellation configuration error")
             raise
 
     def _get_dynamic_model_code(self) -> int:

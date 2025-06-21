@@ -5,7 +5,7 @@ Configuration management for u-blox GPS RTK add-in.
 import os
 import yaml
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ class Config:
             "gps_device": "/dev/ttyUSB0",
             "gps_baudrate": 38400,
             "update_rate_hz": 1,
-            "constellation": "GPS+GLONASS+GALILEO+BEIDOU",
+            "constellation": ["GPS", "GLONASS", "GALILEO", "BEIDOU"],
             "ntrip_enabled": False,
             "ntrip_host": "",
             "ntrip_port": 2101,
@@ -81,8 +81,19 @@ class Config:
         return self.get("update_rate_hz", 1)
     
     @property
-    def constellation(self) -> str:
-        return self.get("constellation", "GPS+GLONASS+GALILEO+BEIDOU")
+    def constellation(self) -> List[str]:
+        """Get constellation list, handling both old string and new list formats."""
+        constellation_config = self.get("constellation", ["GPS", "GLONASS", "GALILEO", "BEIDOU"])
+        
+        # Handle backward compatibility with old string format
+        if isinstance(constellation_config, str):
+            # Convert old "GPS+GLONASS+GALILEO+BEIDOU" format to list
+            return [const.strip() for const in constellation_config.split('+')]
+        elif isinstance(constellation_config, list):
+            return constellation_config
+        else:
+            # Fallback to default if invalid format
+            return ["GPS", "GLONASS", "GALILEO", "BEIDOU"]
     
     @property
     def ntrip_enabled(self) -> bool:
